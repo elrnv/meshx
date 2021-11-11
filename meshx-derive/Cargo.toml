@@ -1,0 +1,22 @@
+[package]
+name = "meshx-derive"
+version = "0.1.0"
+authors = ["Egor Larionov <egor.larionov@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Derive macros for [meshx](https://crates.io/crates/meshx)"
+readme = "README.md"
+edition = "2018"
+
+homepage = "https://github.com/elrnv/meshx"
+repository = "https://github.com/elrnv/meshx"
+documentation = "https://docs.rs/meshx-derive"
+keywords = ["geometry", "attribute", "intrinsic"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0", features = ["full", "extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+lazy_static = "1.4"

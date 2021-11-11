@@ -1,0 +1,11 @@
+# vtk DataFile Version 4.1
+Test Tri
+ASCII
+DATASET POLYDATA
+POINTS 3 float
+0 0 0
+1 0 0
+0 0 -1
+
+POLYGONS 1 4
+3 0 1 2
