@@ -89,10 +89,6 @@ pub use self::tetmesh::*;
 pub use self::uniform_poly_mesh::*;
 pub use self::vertex_positions::*; // reexport intrinsic attribute
 
-/*
- * Below we define common mesh classes that can be useful in generic code.
- */
-
 use self::attrib::VertexAttrib;
 use self::topology::NumVertices;
 use crate::Real;
