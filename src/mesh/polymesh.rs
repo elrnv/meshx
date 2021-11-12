@@ -321,7 +321,7 @@ impl<'a> Iterator for DynamicIndexSliceIterMut<'a> {
         use std::mem;
 
         // get a unique mutable reference for indices
-        let indices_slice = mem::replace(&mut self.indices, &mut []);
+        let indices_slice = mem::take(&mut self.indices);
         match self.offsets.split_first() {
             Some((head, tail)) => {
                 if tail.is_empty() {
