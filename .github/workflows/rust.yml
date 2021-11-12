@@ -39,9 +39,9 @@ jobs:
       run: cargo test --verbose
       
     - name: Build with serde and io
-      run: cargo build --verbose --features="serde io"
+      run: cargo build --verbose --features="serde_all io"
     - name: Test with serde and io
-      run: cargo test --verbose --features="serde io"
+      run: cargo test --verbose --features="serde_all io"
     
     - name: Build with rayon
       run: cargo build --verbose --no-default-features --features="rayon"
@@ -49,9 +49,9 @@ jobs:
       run: cargo test --verbose --no-default-features --features="rayon"
       
     - name: Build with serde, io and rayon
-      run: cargo build --verbose --features="serde io rayon"
+      run: cargo build --verbose --features="serde_all io rayon"
     - name: Test with serde, io and rayon
-      run: cargo test --verbose --features="serde io rayon"
+      run: cargo test --verbose --features="serde_all io rayon"
   
   test_all_features:
     name: Build and Test all features
