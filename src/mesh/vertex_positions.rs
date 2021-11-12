@@ -16,7 +16,7 @@ use std::slice::{Iter, IterMut};
 /// attribute. Make sure that `VertexPositions` is in scope, or specify the path in the argument to
 /// the `intrinsic` attribute directly.
 pub trait VertexPositions {
-    type Element: Copy;
+    type Element;
 
     /// Vertex positions as a slice of triplets.
     fn vertex_positions(&self) -> &[Self::Element];
@@ -41,9 +41,10 @@ pub trait VertexPositions {
     fn vertex_position<VI>(&self, vidx: VI) -> Self::Element
     where
         VI: Into<VertexIndex>,
+        Self::Element: Clone,
     {
         let idx: Index = vidx.into().into();
-        self.vertex_positions()[idx.unwrap()]
+        self.vertex_positions()[idx.unwrap()].clone()
     }
 }
 

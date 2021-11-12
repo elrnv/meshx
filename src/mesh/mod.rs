@@ -91,15 +91,14 @@ pub use self::vertex_positions::*; // reexport intrinsic attribute
 
 use self::attrib::VertexAttrib;
 use self::topology::NumVertices;
-use crate::Real;
 
 /// VertexMesh is a marker trait to allow user code to be generic over vertex centric meshes with
 /// intrinsic vertex positions attributes.
-pub trait VertexMesh<T: Real>:
+pub trait VertexMesh<T>:
     Attrib + VertexAttrib + NumVertices + VertexPositions<Element = [T; 3]>
 {
 }
-impl<M, T: Real> VertexMesh<T> for M where
+impl<M, T> VertexMesh<T> for M where
     M: Attrib + VertexAttrib + NumVertices + VertexPositions<Element = [T; 3]>
 {
 }

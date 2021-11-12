@@ -3,14 +3,14 @@
  */
 
 use crate::prim::Triangle;
-use math::{RealField, Vector3};
+use math::Vector3;
 
 pub fn compute_vertex_area_weighted_normals<T, V3>(
     vertex_positions: &[V3],
     topo: &[[usize; 3]],
     normals: &mut [[T; 3]],
 ) where
-    T: RealField + Copy,
+    T: Copy + math::SimdRealField,
     V3: Into<[T; 3]> + Clone,
 {
     // Clear the normals.

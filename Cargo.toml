@@ -19,7 +19,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 rayon = { version = "1", optional = true }
 hashbrown = { version = "0.11" }
 math = { package = "nalgebra", version = "0.29" }
-flatk = "0.4"
+flatk = "0.5"
 vtkio = { version = "0.6", optional = true }
 objio = { package = "obj", version = "0.10", optional = true }
 
@@ -27,7 +27,7 @@ objio = { package = "obj", version = "0.10", optional = true }
 rand = "0.8"
 approx = "0.5"
 criterion = { version = "0.3" }
-autodiff = "0.3"
+autodiff = { version = "0.4", features = ["na"] }
 
 [features]
 default = ["io"]

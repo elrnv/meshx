@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::ops::*;
 use crate::Pod;
-use math::{convert, RealField, Scalar, ClosedDiv, ClosedAdd, ClosedMul, ClosedSub, Matrix3, Vector3};
+use math::{convert, ClosedAdd, ClosedDiv, ClosedMul, ClosedSub, Matrix3, Scalar, Vector3};
 use num_traits::Zero;
 use std::ops::Neg;
 
@@ -53,7 +53,10 @@ impl<T: Scalar> Triangle<T> {
     }
 }
 
-impl<T: Scalar + Zero + ClosedAdd<T> + ClosedMul<T> + ClosedSub<T> + Neg<Output = T>> Triangle<T> {
+impl<T> Triangle<T>
+where
+    T: Scalar + Zero + ClosedAdd<T> + ClosedMul<T> + ClosedSub<T> + Neg<Output = T>,
+{
     /// Compute the area weighted normal of this triangle. This is the standard way to compute the
     /// normal and the area of the triangle.
     ///
@@ -115,31 +118,43 @@ impl<T: Scalar + Zero + ClosedAdd<T> + ClosedMul<T> + ClosedSub<T> + Neg<Output 
     }
 }
 
-impl<'a, T: RealField + ClosedAdd<T> + ClosedDiv<T>> Centroid<Vector3<T>> for &'a Triangle<T> {
+impl<'a, T> Centroid<Vector3<T>> for &'a Triangle<T>
+where
+    T: Scalar + ClosedAdd<T> + ClosedDiv<T> + num_traits::FromPrimitive,
+{
     #[inline]
     fn centroid(self) -> Vector3<T> {
         let tri = self.clone();
-        (tri.0 + tri.1 + tri.2) / convert::<f64, T>(3.0)
+        (tri.0 + tri.1 + tri.2) / T::from_f64(3.0).unwrap()
     }
 }
 
-impl<'a, T: RealField> Normal<Vector3<T>> for &'a Triangle<T> {
+impl<'a, T> Normal<Vector3<T>> for &'a Triangle<T>
+where
+    T: math::SimdRealField,
+{
     #[inline]
     fn normal(self) -> Vector3<T> {
         let nml: Vector3<T> = self.area_normal().into();
         let norm = nml.norm();
-        nml / norm 
+        nml / norm
     }
 }
 
-impl<'a, T: RealField> Centroid<[T; 3]> for &'a Triangle<T> {
+impl<'a, T> Centroid<[T; 3]> for &'a Triangle<T>
+where
+    T: Scalar + ClosedAdd<T> + ClosedDiv<T> + num_traits::FromPrimitive,
+{
     #[inline]
     fn centroid(self) -> [T; 3] {
         <Self as Centroid<Vector3<T>>>::centroid(self).into()
     }
 }
 
-impl<'a, T: RealField> Normal<[T; 3]> for &'a Triangle<T> {
+impl<'a, T> Normal<[T; 3]> for &'a Triangle<T>
+where
+    T: Scalar + ClosedAdd<T> + ClosedDiv<T> + num_traits::FromPrimitive,
+{
     #[inline]
     fn normal(self) -> [T; 3] {
         <Self as Centroid<Vector3<T>>>::centroid(self).into()
@@ -187,7 +202,10 @@ impl<T: Scalar + ClosedSub<T>> ShapeMatrix<[[T; 3]; 2]> for Triangle<T> {
     }
 }
 
-impl<'a, T: RealField> Area<T> for &'a Triangle<T> {
+impl<'a, T> Area<T> for &'a Triangle<T>
+where
+    T: math::SimdRealField,
+{
     #[inline]
     fn area(self) -> T {
         self.signed_area()
@@ -198,7 +216,10 @@ impl<'a, T: RealField> Area<T> for &'a Triangle<T> {
     }
 }
 
-impl<T: RealField> Area<T> for Triangle<T> {
+impl<T> Area<T> for Triangle<T>
+where
+    T: math::SimdRealField,
+{
     #[inline]
     fn area(self) -> T {
         // A triangle in 3D space can't be inverted.
