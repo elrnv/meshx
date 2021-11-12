@@ -19,6 +19,16 @@ pub enum CellType {
     Triangle,
 }
 
+impl CellType {
+    /// Returns the number of vertices referenced by this cell type.
+    pub fn num_verts(&self) -> usize {
+        match self {
+            CellType::Triangle => 3,
+            CellType::Tetrahedron => 4,
+        }
+    }
+}
+
 /// Mesh with arbitrarily shaped elements or cells.
 ///
 /// NOTE: We stick with the terminology cell but these could very well be called
@@ -45,7 +55,165 @@ pub struct Mesh<T: Real> {
 }
 
 impl<T: Real> Mesh<T> {
-    /// Construct a `Mesh` from an array of vertices and cells with associated types given queried with a function.
+    /// Constructs a `Mesh` from an array of vertices and cells with a number of counts of each cell type
+    /// appearing in `cells` given by `counts` and `types`.
+    ///
+    /// The `cells` array contains contiguous indices into the vertex array for each cell.
+    ///
+    /// # Examples
+    /// ```
+    /// use meshx::mesh::{Mesh, CellType};
+    /// let points = vec![
+    ///     [0.0, 0.0, 0.0],
+    ///     [1.0, 0.0, 0.0],
+    ///     [0.0, 1.0, 0.0],
+    ///     [1.0, 1.0, 0.0],
+    ///     [0.0, 0.0, 1.0],
+    ///     [1.0, 0.0, 1.0]];
+    /// let cells = vec![0, 1, 2, // first triangle
+    ///                  1, 3, 2, // second triangle
+    ///                  0, 1, 5, 4]; // tetrahedron
+    /// let counts = vec![2, 1];
+    /// let types = vec![CellType::Triangle, CellType::Tetrahedron];
+    ///
+    /// let mesh = Mesh::from_cells_counts_and_types(points, cells, counts, types);
+    ///
+    /// assert_eq!(mesh.indices.data, vec![0, 1, 2, 1, 3, 2, 0, 1, 5, 4]);
+    /// assert_eq!(mesh.types, vec![CellType::Triangle, CellType::Tetrahedron]);
+    /// let mut iter = mesh.cell_iter();
+    /// assert_eq!(iter.next(), Some(&[0,1,2][..]));
+    /// assert_eq!(iter.next(), Some(&[1,3,2][..]));
+    /// assert_eq!(iter.next(), Some(&[0,1,5,4][..]));
+    /// assert_eq!(iter.next(), None);
+    /// ```
+    pub fn from_cells_counts_and_types(
+        verts: impl Into<Vec<[T; 3]>>,
+        cells: impl Into<Vec<usize>>,
+        counts: impl AsRef<[usize]>,
+        types: impl Into<Vec<CellType>>,
+    ) -> Mesh<T> {
+        Self::from_cells_counts_and_types_impl(
+            verts.into(),
+            cells.into(),
+            counts.as_ref(),
+            types.into(),
+        )
+    }
+
+    // Non-generic implementation of the `from_cells_counts_and_types` method.
+    fn from_cells_counts_and_types_impl(
+        verts: Vec<[T; 3]>,
+        cells: Vec<usize>,
+        counts: &[usize],
+        types: Vec<CellType>,
+    ) -> Mesh<T> {
+        let sizes: Vec<_> = types.iter().map(CellType::num_verts).collect();
+        let clumped_indices = flatk::Clumped::from_sizes_and_counts(sizes, counts, cells);
+
+        Mesh {
+            vertex_positions: IntrinsicAttribute::from_vec(verts),
+            indices: clumped_indices,
+            types,
+            vertex_attributes: AttribDict::new(),
+            cell_attributes: AttribDict::new(),
+            cell_vertex_attributes: AttribDict::new(),
+            attribute_value_cache: AttribValueCache::with_hasher(Default::default()),
+        }
+    }
+
+    /// Constructs a `Mesh` from an array of vertices and clumped cells with
+    /// associated types.
+    ///
+    /// The `cells` array contains contiguous indices into the vertex array for
+    /// each cell.  The `offsets` array contains offsets into the `cells` array,
+    /// beginning with 0 and ending with the number of elements in the `cells`
+    /// array.  Each additional offset in the middle should index each time the
+    /// type of cell changes inside `cells`.  The `types` array contains the
+    /// cell types for each contiguous _block_ of cells, where each block has
+    /// the same type.  For instance if cells contains 10 triangles and 4
+    /// tetrahedra, then `offests` should contain `[0, 10, 14]` and `types`
+    /// should contain two elements: `[CellType::Triangle,
+    /// CellType::Tetrahedron]`.
+    ///
+    /// # Examples
+    /// ```
+    /// use meshx::mesh::{Mesh, CellType};
+    /// let points = vec![
+    ///     [0.0, 0.0, 0.0],
+    ///     [1.0, 0.0, 0.0],
+    ///     [0.0, 1.0, 0.0],
+    ///     [1.0, 1.0, 0.0],
+    ///     [0.0, 0.0, 1.0],
+    ///     [1.0, 0.0, 1.0]];
+    /// let cells = vec![0, 1, 2, // first triangle
+    ///                  1, 3, 2, // second triangle
+    ///                  0, 1, 5, 4]; // tetrahedron
+    /// let offsets = vec![0, 2, 3];
+    /// let types = vec![CellType::Triangle, CellType::Tetrahedron];
+    ///
+    /// let mesh = Mesh::from_clumped_cells_and_types(points, cells, offsets, types);
+    ///
+    /// assert_eq!(mesh.indices.data, vec![0, 1, 2, 1, 3, 2, 0, 1, 5, 4]);
+    /// assert_eq!(mesh.types, vec![CellType::Triangle, CellType::Tetrahedron]);
+    /// let mut iter = mesh.cell_iter();
+    /// assert_eq!(iter.next(), Some(&[0,1,2][..]));
+    /// assert_eq!(iter.next(), Some(&[1,3,2][..]));
+    /// assert_eq!(iter.next(), Some(&[0,1,5,4][..]));
+    /// assert_eq!(iter.next(), None);
+    /// ```
+    pub fn from_clumped_cells_and_types(
+        verts: impl Into<Vec<[T; 3]>>,
+        cells: impl Into<Vec<usize>>,
+        offsets: impl Into<Vec<usize>>,
+        types: impl Into<Vec<CellType>>,
+    ) -> Mesh<T> {
+        Self::from_clumped_cells_and_types_impl(
+            verts.into(),
+            cells.into(),
+            offsets.into(),
+            types.into(),
+        )
+    }
+
+    // A non-generic implementation of `from_clumped_cells_and_types`.
+    fn from_clumped_cells_and_types_impl(
+        verts: Vec<[T; 3]>,
+        cells: Vec<usize>,
+        mut chunk_offsets: Vec<usize>,
+        types: Vec<CellType>,
+    ) -> Mesh<T> {
+        // Make sure offsets is correctly structured (always contains a 0 as required by `from_clumped_offsets` below).
+        if chunk_offsets.is_empty() {
+            chunk_offsets.push(0);
+        }
+
+        let offsets: Vec<_> = chunk_offsets
+            .iter()
+            .enumerate()
+            .scan((0, 0), |(prev_off, prev_chunk_off), (i, &chunk_off)| {
+                Some(if i > 0 {
+                    *prev_off =
+                        *prev_off + (chunk_off - *prev_chunk_off) * types[i - 1].num_verts();
+                    *prev_chunk_off = chunk_off;
+                    *prev_off
+                } else {
+                    0
+                })
+            })
+            .collect();
+
+        Mesh {
+            vertex_positions: IntrinsicAttribute::from_vec(verts),
+            indices: flatk::Clumped::from_clumped_offsets(chunk_offsets, offsets, cells),
+            types,
+            vertex_attributes: AttribDict::new(),
+            cell_attributes: AttribDict::new(),
+            cell_vertex_attributes: AttribDict::new(),
+            attribute_value_cache: AttribValueCache::with_hasher(Default::default()),
+        }
+    }
+
+    /// Constructs a `Mesh` from an array of vertices and cells with associated types given queried with a function.
     ///
     /// The `cells` array contains the indices into the vertex array for each cell preceeded by the
     /// number of vertices in the corresponding cell. I.e. `cells` is expected to be structured as
@@ -69,12 +237,26 @@ impl<T: Real> Mesh<T> {
     ///                  3, 1, 3, 2, // second triangle
     ///                  4, 0, 1, 5, 4]; // tetrahedron
     ///
-    /// let mesh = Mesh::from_cells_with_type(points, &cells, |i| if i < 2 { CellType::Triangle } else { CellType::Tetrahedron });
+    /// let mesh = Mesh::from_cells_with_type(points, cells, |i| if i < 2 { CellType::Triangle } else { CellType::Tetrahedron });
     ///
     /// assert_eq!(mesh.indices.data, vec![0, 1, 2, 1, 3, 2, 0, 1, 5, 4]);
-    ///
+    /// assert_eq!(mesh.types, vec![CellType::Triangle, CellType::Tetrahedron]);
+    /// let mut iter = mesh.cell_iter();
+    /// assert_eq!(iter.next(), Some(&[0,1,2][..]));
+    /// assert_eq!(iter.next(), Some(&[1,3,2][..]));
+    /// assert_eq!(iter.next(), Some(&[0,1,5,4][..]));
+    /// assert_eq!(iter.next(), None);
     /// ```
     pub fn from_cells_with_type(
+        verts: impl Into<Vec<[T; 3]>>,
+        cells: impl AsRef<[usize]>,
+        type_at: impl Fn(usize) -> CellType,
+    ) -> Mesh<T> {
+        Self::from_cells_with_type_impl(verts.into(), cells.as_ref(), type_at)
+    }
+
+    // A mostly non-generic implementation of `from_cells_with_type`.
+    fn from_cells_with_type_impl(
         verts: Vec<[T; 3]>,
         cells: &[usize],
         type_at: impl Fn(usize) -> CellType,
@@ -98,40 +280,19 @@ impl<T: Real> Mesh<T> {
 
         let chunked_indices = flatk::Chunked::from_offsets(offsets, indices);
 
-        // TODO: use the From trait to convert to Clumped.
-        let clumped_indices = flatk::Clumped {
-            chunks: flatk::ClumpedOffsets::from(chunked_indices.chunks),
-            data: chunked_indices.data,
-        };
+        let clumped_indices = flatk::Clumped::from(chunked_indices);
 
-        let types = (0..clumped_indices.chunks.num_clumps())
+        let types = clumped_indices
+            .chunks
+            .chunk_offsets
+            .iter()
             .map(type_at)
+            .take(clumped_indices.chunks.num_clumps())
             .collect();
 
         Mesh {
             vertex_positions: IntrinsicAttribute::from_vec(verts),
             indices: clumped_indices,
-            types,
-            vertex_attributes: AttribDict::new(),
-            cell_attributes: AttribDict::new(),
-            cell_vertex_attributes: AttribDict::new(),
-            attribute_value_cache: AttribValueCache::with_hasher(Default::default()),
-        }
-    }
-
-    /// Construct a `Mesh` from an array of vertices and clumped cells with associated types.
-    ///
-    /// This is the most efficient way to construct a mesh, but also the easiest to get wrong.
-    pub fn from_clumped_cells_and_types(
-        verts: Vec<[T; 3]>,
-        cells: Vec<usize>,
-        offsets: Vec<usize>,
-        chunk_offsets: Vec<usize>,
-        types: Vec<CellType>,
-    ) -> Mesh<T> {
-        Mesh {
-            vertex_positions: IntrinsicAttribute::from_vec(verts),
-            indices: flatk::Clumped::from_clumped_offsets(chunk_offsets, offsets, cells),
             types,
             vertex_attributes: AttribDict::new(),
             cell_attributes: AttribDict::new(),
@@ -197,7 +358,7 @@ impl<T: Real> Default for Mesh<T> {
     ///
     /// This function allocates two `Vec`s of size 1.
     fn default() -> Self {
-        Mesh::from_clumped_cells_and_types(vec![], vec![], vec![0], vec![0], vec![])
+        Mesh::from_clumped_cells_and_types(vec![], vec![], vec![0], vec![])
     }
 }
 
@@ -346,13 +507,7 @@ impl<T: Real> From<super::PointCloud<T>> for Mesh<T> {
 
         Mesh {
             vertex_attributes,
-            ..Mesh::from_clumped_cells_and_types(
-                vertex_positions.into(),
-                vec![],
-                vec![0],
-                vec![0],
-                vec![],
-            )
+            ..Mesh::from_clumped_cells_and_types(vertex_positions, vec![], vec![0], vec![])
         }
     }
 }
@@ -391,6 +546,7 @@ mod tests {
 
         assert_eq!(Index::from(mesh.cell_to_vertex(1, 1)), 3);
         assert_eq!(Index::from(mesh.cell_to_vertex(0, 2)), 2);
+        assert_eq!(mesh.types, vec![CellType::Triangle, CellType::Tetrahedron]);
     }
 
     fn sample_points() -> Vec<[f64; 3]> {
