@@ -1,6 +1,6 @@
 [package]
 name = "meshx"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Egor Larionov <egor.larionov@gmail.com>"]
 description = "A mesh eXchange library with conversion utilities for popular mesh formats."
 edition = "2018"
@@ -33,4 +33,5 @@ autodiff = { version = "0.4", features = ["na"] }
 default = ["io"]
 io = ["vtkio", "objio"]
 bench = ["criterion/real_blackbox", "rayon"]
+serde_all = ["serde", "math/serde-serialize"]
 unstable = []
