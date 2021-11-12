@@ -31,6 +31,8 @@ impl CellType {
 
 /// Mesh with arbitrarily shaped elements or cells.
 ///
+/// The currently supported cell types are listed in the [`CellType`] enum.
+///
 /// NOTE: We stick with the terminology cell but these could very well be called
 /// elements. The exact terminology would depend on how this mesh is used.
 #[derive(Clone, Debug, PartialEq, Attrib, Intrinsic)]
