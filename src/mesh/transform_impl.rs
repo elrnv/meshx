@@ -5,7 +5,7 @@
 use super::vertex_positions::VertexPositions;
 use crate::ops::transform::*;
 
-use math::{RealField, Matrix3, Vector3};
+use math::{Matrix3, RealField, Vector3};
 use num_traits::Float;
 
 impl<T: RealField, M: VertexPositions<Element = [T; 3]>> Scale<T> for M {

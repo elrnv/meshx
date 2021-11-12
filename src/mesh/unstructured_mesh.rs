@@ -1,6 +1,6 @@
 //!
 //! Unstructured mesh module.
-//! 
+//!
 //! This module defines a mesh data structure cunstructed from unstructured
 //! cells of arbitrary shape.
 //!
@@ -20,7 +20,7 @@ pub enum CellType {
 }
 
 /// Mesh with arbitrarily shaped elements or cells.
-/// 
+///
 /// NOTE: We stick with the terminology cell but these could very well be called
 /// elements. The exact terminology would depend on how this mesh is used.
 #[derive(Clone, Debug, PartialEq, Attrib, Intrinsic)]
@@ -28,7 +28,7 @@ pub struct Mesh<T: Real> {
     /// Vertex positions intrinsic attribute.
     #[intrinsic(VertexPositions)]
     pub vertex_positions: IntrinsicAttribute<[T; 3], VertexIndex>,
-    /// Indices into `vertices`. Each chunk represents a cell, and cells 
+    /// Indices into `vertices`. Each chunk represents a cell, and cells
     /// can have an arbitrary number of referenced vertices. Each clump
     /// represents cells of the same kind.
     pub indices: flatk::Clumped<Vec<usize>>,
@@ -74,7 +74,11 @@ impl<T: Real> Mesh<T> {
     /// assert_eq!(mesh.indices.data, vec![0, 1, 2, 1, 3, 2, 0, 1, 5, 4]);
     ///
     /// ```
-    pub fn from_cells_with_type(verts: Vec<[T; 3]>, cells: &[usize], type_at: impl Fn(usize) -> CellType) -> Mesh<T> {
+    pub fn from_cells_with_type(
+        verts: Vec<[T; 3]>,
+        cells: &[usize],
+        type_at: impl Fn(usize) -> CellType,
+    ) -> Mesh<T> {
         let mut indices = Vec::new();
         let mut offsets = Vec::new();
         let mut i = 0;
@@ -97,10 +101,12 @@ impl<T: Real> Mesh<T> {
         // TODO: use the From trait to convert to Clumped.
         let clumped_indices = flatk::Clumped {
             chunks: flatk::ClumpedOffsets::from(chunked_indices.chunks),
-            data: chunked_indices.data
+            data: chunked_indices.data,
         };
-            
-        let types = (0..clumped_indices.chunks.num_clumps()).map(type_at).collect();
+
+        let types = (0..clumped_indices.chunks.num_clumps())
+            .map(type_at)
+            .collect();
 
         Mesh {
             vertex_positions: IntrinsicAttribute::from_vec(verts),
@@ -116,8 +122,13 @@ impl<T: Real> Mesh<T> {
     /// Construct a `Mesh` from an array of vertices and clumped cells with associated types.
     ///
     /// This is the most efficient way to construct a mesh, but also the easiest to get wrong.
-    pub fn from_clumped_cells_and_types(verts: Vec<[T; 3]>, cells: Vec<usize>, offsets: Vec<usize>, chunk_offsets: Vec<usize>, types: Vec<CellType>) -> Mesh<T>
-    {
+    pub fn from_clumped_cells_and_types(
+        verts: Vec<[T; 3]>,
+        cells: Vec<usize>,
+        offsets: Vec<usize>,
+        chunk_offsets: Vec<usize>,
+        types: Vec<CellType>,
+    ) -> Mesh<T> {
         Mesh {
             vertex_positions: IntrinsicAttribute::from_vec(verts),
             indices: flatk::Clumped::from_clumped_offsets(chunk_offsets, offsets, cells),
@@ -169,7 +180,7 @@ impl<T: Real> Mesh<T> {
     }
 
     /// Reverse the order of each cell in this mesh.
-    /// 
+    ///
     ///  This is the consuming version of the `reverse` method.
     #[inline]
     pub fn reversed(mut self) -> Mesh<T> {
@@ -180,10 +191,10 @@ impl<T: Real> Mesh<T> {
 
 impl<T: Real> Default for Mesh<T> {
     /// Produce an empty mesh.
-    /// 
+    ///
     /// This is not particularly useful on its own, however it can be used as a
     /// null case for various mesh algorithms.
-    /// 
+    ///
     /// This function allocates two `Vec`s of size 1.
     fn default() -> Self {
         Mesh::from_clumped_cells_and_types(vec![], vec![], vec![0], vec![0], vec![])
@@ -266,22 +277,26 @@ impl<T: Real> From<super::TriMesh<T>> for Mesh<T> {
         // as is.
 
         let mut cell_attributes = AttribDict::new();
-        for (name, attrib ) in face_attributes {
+        for (name, attrib) in face_attributes {
             let mut new_attrib = attrib.promote_empty::<CellIndex>();
             new_attrib.data = attrib.data;
-            cell_attributes.insert( name, new_attrib);
+            cell_attributes.insert(name, new_attrib);
         }
 
         let mut cell_vertex_attributes = AttribDict::new();
-        for (name, attrib ) in face_vertex_attributes {
+        for (name, attrib) in face_vertex_attributes {
             let mut new_attrib = attrib.promote_empty::<CellVertexIndex>();
             new_attrib.data = attrib.data;
-            cell_vertex_attributes.insert( name, new_attrib);
+            cell_vertex_attributes.insert(name, new_attrib);
         }
 
         Mesh {
             vertex_positions,
-            indices: flatk::Clumped::from_clumped_offsets(vec![0, indices.len()], vec![0, 3*indices.len()], flatk::Chunked3::from_array_vec(indices.into_vec()).into_inner()),
+            indices: flatk::Clumped::from_clumped_offsets(
+                vec![0, indices.len()],
+                vec![0, 3 * indices.len()],
+                flatk::Chunked3::from_array_vec(indices.into_vec()).into_inner(),
+            ),
             types,
             vertex_attributes,
             cell_attributes,
@@ -307,7 +322,11 @@ impl<T: Real> From<super::TetMesh<T>> for Mesh<T> {
 
         Mesh {
             vertex_positions,
-            indices: flatk::Clumped::<Vec<usize>>::from_clumped_offsets(vec![0,indices.len()], vec![0, 4*indices.len()], flatk::Chunked4::from_array_vec(indices.into_vec()).into_inner()),
+            indices: flatk::Clumped::<Vec<usize>>::from_clumped_offsets(
+                vec![0, indices.len()],
+                vec![0, 4 * indices.len()],
+                flatk::Chunked4::from_array_vec(indices.into_vec()).into_inner(),
+            ),
             types,
             vertex_attributes,
             cell_attributes,
@@ -327,7 +346,13 @@ impl<T: Real> From<super::PointCloud<T>> for Mesh<T> {
 
         Mesh {
             vertex_attributes,
-            ..Mesh::from_clumped_cells_and_types(vertex_positions.into(), vec![], vec![0], vec![0], vec![])
+            ..Mesh::from_clumped_cells_and_types(
+                vertex_positions.into(),
+                vec![],
+                vec![0],
+                vec![0],
+                vec![],
+            )
         }
     }
 }
@@ -353,7 +378,13 @@ mod tests {
             4, 0, 1, 5, 4, // tetrahedron
         ];
 
-        let mesh = Mesh::from_cells_with_type(points, &cells, |i| if i < 2 { CellType::Triangle } else { CellType::Tetrahedron });
+        let mesh = Mesh::from_cells_with_type(points, &cells, |i| {
+            if i < 2 {
+                CellType::Triangle
+            } else {
+                CellType::Tetrahedron
+            }
+        });
         assert_eq!(mesh.num_vertices(), 6);
         assert_eq!(mesh.num_cells(), 3);
         assert_eq!(mesh.num_cell_vertices(), 10);
@@ -381,7 +412,8 @@ mod tests {
         ];
 
         let trimesh = TriMesh::new(points.clone(), vec![[0, 1, 2], [1, 3, 2]]);
-        let tri_mesh = Mesh::from_cells_with_type(points.clone(), &tri_faces, |_| CellType::Triangle);
+        let tri_mesh =
+            Mesh::from_cells_with_type(points.clone(), &tri_faces, |_| CellType::Triangle);
         assert_eq!(Mesh::from(trimesh), tri_mesh);
     }
 
@@ -404,7 +436,11 @@ mod tests {
         let points = sample_points();
 
         let ptcld = PointCloud::new(points.clone());
-        let ptcld_mesh = Mesh::from_cells_with_type(points.clone(), &[], |_| CellType::Triangle /* never called */);
+        let ptcld_mesh = Mesh::from_cells_with_type(
+            points.clone(),
+            &[],
+            |_| CellType::Triangle, /* never called */
+        );
         assert_eq!(Mesh::from(ptcld), ptcld_mesh);
     }
 }

@@ -8,7 +8,6 @@ pub mod transform_impl;
 /// from/to different mesh components.
 pub mod attrib;
 
-pub mod unstructured_mesh;
 pub mod pointcloud;
 pub mod polymesh;
 /// Macro to implement constant size slice iterator.
@@ -78,15 +77,16 @@ pub mod polymesh;
 //}
 pub mod tetmesh;
 pub mod uniform_poly_mesh;
+pub mod unstructured_mesh;
 pub mod vertex_positions;
 
 // Re-export meshes and traits
 pub use self::attrib::Attrib;
-pub use self::unstructured_mesh::*;
 pub use self::pointcloud::*;
 pub use self::polymesh::*;
 pub use self::tetmesh::*;
 pub use self::uniform_poly_mesh::*;
+pub use self::unstructured_mesh::*;
 pub use self::vertex_positions::*; // reexport intrinsic attribute
 
 use self::attrib::VertexAttrib;

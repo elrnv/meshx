@@ -4,8 +4,8 @@
 //!
 
 use crate::ops::Skew;
-use math::{RealField, Matrix3, Vector3};
-use num_traits::{Zero};
+use math::{Matrix3, RealField, Vector3};
+use num_traits::Zero;
 
 pub trait Scale<T: Clone> {
     /// Scale the given object in 3D by a given vector of scale factors.

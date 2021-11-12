@@ -36,9 +36,6 @@ pub trait Real:
 {
 }
 impl<T> Real for T where
-    T: math::ComplexField + num_traits::Float
-        + ::std::fmt::Debug
-        + std::iter::Sum
-        + Pod
+    T: math::ComplexField + num_traits::Float + ::std::fmt::Debug + std::iter::Sum + Pod
 {
 }

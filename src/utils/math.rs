@@ -1,6 +1,6 @@
 use crate::ops::Skew;
-use math::{Scalar, Matrix3, Vector3};
-use num_traits::{Zero};
+use math::{Matrix3, Scalar, Vector3};
+use num_traits::Zero;
 use std::ops::Neg;
 
 impl<T: Zero + Neg<Output = T> + Clone> Skew for [T; 3] {

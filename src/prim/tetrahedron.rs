@@ -1,8 +1,8 @@
 use crate::ops::{Centroid, ShapeMatrix, Volume};
 use crate::Pod;
-use math::{ClosedSub, ClosedMul, ClosedAdd, Scalar, RealField, Matrix3, Vector3};
+use math::{ClosedAdd, ClosedMul, ClosedSub, Matrix3, RealField, Scalar, Vector3};
 use num_traits::FromPrimitive;
-use std::ops::{Add, Sub, Mul};
+use std::ops::{Add, Mul, Sub};
 
 /// Generic tetrahedron with four points
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -114,7 +114,12 @@ impl<T: Scalar + ClosedMul<T>> Mul<T> for Tetrahedron<T> {
     type Output = Self;
 
     fn mul(self, rhs: T) -> Self {
-        Tetrahedron(self.0 * rhs.clone(), self.1 * rhs.clone(), self.2 * rhs.clone(), self.3 * rhs)
+        Tetrahedron(
+            self.0 * rhs.clone(),
+            self.1 * rhs.clone(),
+            self.2 * rhs.clone(),
+            self.3 * rhs,
+        )
     }
 }
 
@@ -123,11 +128,18 @@ impl<'a, T: Scalar + ClosedMul<T>> Mul<T> for &'a Tetrahedron<T> {
 
     fn mul(self, rhs: T) -> Tetrahedron<T> {
         let tet = self.clone();
-        Tetrahedron(tet.0 * rhs.clone(), tet.1 * rhs.clone(), tet.2 * rhs.clone(), tet.3 * rhs)
+        Tetrahedron(
+            tet.0 * rhs.clone(),
+            tet.1 * rhs.clone(),
+            tet.2 * rhs.clone(),
+            tet.3 * rhs,
+        )
     }
 }
 
-impl<'a, T: Scalar + ClosedAdd<T> + ClosedMul<T> + FromPrimitive> Centroid<[T; 3]> for &'a Tetrahedron<T> {
+impl<'a, T: Scalar + ClosedAdd<T> + ClosedMul<T> + FromPrimitive> Centroid<[T; 3]>
+    for &'a Tetrahedron<T>
+{
     #[inline]
     fn centroid(self) -> [T; 3] {
         let tet = self.clone();
