@@ -109,7 +109,7 @@ impl<T: Real> TetMeshExt<T> {
 
     /// Tetrahedron iterator.
     #[inline]
-    pub fn tet_iter<'a>(&'a self) -> impl Iterator<Item = Tetrahedron<T>> + 'a {
+    pub fn tet_iter(&self) -> impl Iterator<Item = Tetrahedron<T>> + '_ {
         self.tetmesh.tet_iter()
     }
 

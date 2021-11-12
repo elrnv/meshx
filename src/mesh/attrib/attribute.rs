@@ -313,7 +313,7 @@ impl IndirectData {
 
     /// Produce an iterator over the underlying data elements.
     #[inline]
-    pub fn iter<'a, T: Any>(&'a self) -> Result<impl Iterator<Item = &'a T> + 'a, Error> {
+    pub fn iter<T: Any>(&self) -> Result<impl Iterator<Item = &T>, Error> {
         self.buf
             .iter_as::<Irc<T>>()
             .map(|iter| iter.map(|rc| &**rc))
@@ -555,7 +555,7 @@ impl DirectData {
         let actual = new_value_ref.value_type_id();
         self.data_mut()
             .push_cloned(new_value_ref)
-            .ok_or_else(|| Error::TypeMismatch { expected, actual })?;
+            .ok_or(Error::TypeMismatch { expected, actual })?;
         Ok(self)
     }
 
@@ -1509,10 +1509,10 @@ impl<T, I> From<Vec<T>> for IntrinsicAttribute<T, I> {
     }
 }
 
-impl<T, I> Into<Vec<T>> for IntrinsicAttribute<T, I> {
+impl<T, I> From<IntrinsicAttribute<T, I>> for Vec<T> {
     #[inline]
-    fn into(self) -> Vec<T> {
-        self.into_vec()
+    fn from(val: IntrinsicAttribute<T, I>) -> Self {
+        val.into_vec()
     }
 }
 

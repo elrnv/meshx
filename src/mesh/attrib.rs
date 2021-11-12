@@ -321,10 +321,7 @@ where
     ///
     /// From there you can use methods defined on the returned attribute, and if desired return
     /// it back to the dictionary with `insert_attrib`.
-    fn remove_attrib<'a, I: AttribIndex<Self>>(
-        &mut self,
-        name: &'a str,
-    ) -> Result<Attribute<I>, Error> {
+    fn remove_attrib<I: AttribIndex<Self>>(&mut self, name: &str) -> Result<Attribute<I>, Error> {
         match self.attrib_dict_mut().remove(name) {
             Some(attrib) => Ok(attrib),
             None => Err(Error::DoesNotExist(name.to_owned())),
@@ -336,9 +333,9 @@ where
     /// This means that if an attribute with the same name exists, it will be returned and the
     /// current table entry is updated with the new value. If it doesn't already exist, `None` is
     /// returned.
-    fn insert_attrib<'a, I: AttribIndex<Self>>(
+    fn insert_attrib<I: AttribIndex<Self>>(
         &mut self,
-        name: &'a str,
+        name: &str,
         attrib: Attribute<I>,
     ) -> Result<Option<Attribute<I>>, Error> {
         let expected_size = self.attrib_size::<I>();
@@ -485,7 +482,7 @@ where
     /// Return `true` if the given attribute exists at the given location, and
     /// `false` otherwise, even if the specified attribute location is invalid
     /// for the mesh.
-    fn attrib_exists<'a, I: AttribIndex<Self>>(&self, name: &'a str) -> bool {
+    fn attrib_exists<I: AttribIndex<Self>>(&self, name: &str) -> bool {
         self.attrib_dict::<I>().contains_key(&name.to_owned())
     }
 
@@ -620,7 +617,7 @@ impl<T: crate::Real> AttribPromote<FaceVertexIndex, VertexIndex> for crate::mesh
                 // Combine with promoted attribute
                 for (fv_idx, fv_val) in attrib.direct_iter::<U>()?.enumerate() {
                     let vtx_idx = indices[fv_idx / 3][fv_idx % 3];
-                    combine(&mut other[vtx_idx], &fv_val);
+                    combine(&mut other[vtx_idx], fv_val);
                 }
                 Ok(entry.into_mut())
             }

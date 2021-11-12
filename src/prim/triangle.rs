@@ -73,8 +73,8 @@ where
     pub fn area_normal_gradient(&self, wrt: usize) -> [[T; 3]; 3] {
         let tri = self.clone();
         match wrt {
-            0 => (tri.1.clone() - tri.2.clone()).skew(),
-            1 => (tri.2 - tri.0.clone()).skew(),
+            0 => (tri.1 - tri.2).skew(),
+            1 => (tri.2 - tri.0).skew(),
             2 => (tri.0 - tri.1).skew(),
             _ => panic!("Triangle has only 3 vertices"),
         }

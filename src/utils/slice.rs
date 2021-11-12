@@ -4,6 +4,9 @@ use dync::{traits::HasDrop, SliceMut};
 pub trait Swap {
     fn len(&self) -> usize;
     fn swap(&mut self, i: usize, j: usize);
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl<T> Swap for Vec<T> {

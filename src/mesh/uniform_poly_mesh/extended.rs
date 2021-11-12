@@ -308,7 +308,7 @@ impl<T: Real> TriMeshExt<T> {
     /// assert_eq!(Some(tri), mesh.tri_iter().next());
     /// ```
     #[inline]
-    pub fn tri_iter<'a>(&'a self) -> impl Iterator<Item = Triangle<T>> + 'a {
+    pub fn tri_iter(&self) -> impl Iterator<Item = Triangle<T>> + '_ {
         self.base_mesh.tri_iter()
     }
 

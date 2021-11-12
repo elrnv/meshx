@@ -131,11 +131,11 @@ impl_from_signed!(i32);
 impl_from_signed!(i16);
 impl_from_signed!(i8);
 
-impl Into<Option<usize>> for Index {
+impl From<Index> for Option<usize> {
     #[inline]
-    fn into(self) -> Option<usize> {
-        if self.is_valid() {
-            Some(self.0 as usize)
+    fn from(val: Index) -> Self {
+        if val.is_valid() {
+            Some(val.0 as usize)
         } else {
             None
         }

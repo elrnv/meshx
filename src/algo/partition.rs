@@ -29,7 +29,7 @@ pub fn partition<'a, T: Hash + Eq + 'a>(iter: impl Iterator<Item = &'a T>) -> (V
 
     let mut part_counter = 0;
     for val in iter {
-        let part = map.entry(val.into()).or_insert_with(|| {
+        let part = map.entry(val).or_insert_with(|| {
             let part = part_counter;
             part_counter += 1;
             part

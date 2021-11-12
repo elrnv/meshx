@@ -344,7 +344,7 @@ impl<T: Real> TriMesh<T> {
     /// assert_eq!(Some(tri), mesh.tri_iter().next());
     /// ```
     #[inline]
-    pub fn tri_iter<'a>(&'a self) -> impl Iterator<Item = Triangle<T>> + 'a {
+    pub fn tri_iter(&self) -> impl Iterator<Item = Triangle<T>> + '_ {
         self.face_iter().map(move |tri| self.tri_from_indices(tri))
     }
 

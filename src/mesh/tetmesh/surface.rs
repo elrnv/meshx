@@ -89,9 +89,9 @@ impl PartialOrd for TetFace {
 impl Ord for TetFace {
     fn cmp(&self, other: &TetFace) -> std::cmp::Ordering {
         let mut tri = self.tri;
-        tri.sort();
+        tri.sort_unstable();
         let mut other_tri = other.tri;
-        other_tri.sort();
+        other_tri.sort_unstable();
         tri.cmp(&other_tri)
     }
 }
@@ -174,7 +174,7 @@ impl<T: Real> TetMesh<T> {
     /// Extract indices of vertices that are on the surface of this `TetMesh`.
     pub fn surface_vertices(&self) -> Vec<usize> {
         let mut verts = flatk::Chunked3::from_array_vec(self.surface_topo()).into_inner();
-        verts.sort();
+        verts.sort_unstable();
         verts.dedup();
         verts
     }

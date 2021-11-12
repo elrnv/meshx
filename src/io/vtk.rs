@@ -238,7 +238,7 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
         } = &self;
         match data {
             model::DataSet::UnstructuredGrid { pieces, .. } => {
-                let mesh = PolyMesh::merge_iter(pieces.into_iter().filter_map(|piece| {
+                let mesh = PolyMesh::merge_iter(pieces.iter().filter_map(|piece| {
                     let model::UnstructuredGridPiece {
                         points,
                         cells: model::Cells { cell_verts, types },
@@ -343,90 +343,88 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                 }
             }
             model::DataSet::PolyData { pieces, .. } => {
-                Ok(PolyMesh::merge_iter(pieces.into_iter().filter_map(
-                    |piece| {
-                        let model::PolyDataPiece {
-                            points,
-                            lines,
-                            polys,
-                            strips,
-                            // PolyData with vertices is best represented by a PointCloud
-                            data,
-                            ..
-                        } = piece
-                            .load_piece_data(file_path.as_ref().map(AsRef::as_ref))
-                            .ok()?;
-                        // Get points.
-                        let pt_coords: Vec<T> = points.cast_into()?; // None is returned in case of overflow.
-                        let mut pts = Vec::with_capacity(pt_coords.len() / 3);
-                        for coords in pt_coords.chunks_exact(3) {
-                            pts.push([coords[0], coords[1], coords[2]]);
+                Ok(PolyMesh::merge_iter(pieces.iter().filter_map(|piece| {
+                    let model::PolyDataPiece {
+                        points,
+                        lines,
+                        polys,
+                        strips,
+                        // PolyData with vertices is best represented by a PointCloud
+                        data,
+                        ..
+                    } = piece
+                        .load_piece_data(file_path.as_ref().map(AsRef::as_ref))
+                        .ok()?;
+                    // Get points.
+                    let pt_coords: Vec<T> = points.cast_into()?; // None is returned in case of overflow.
+                    let mut pts = Vec::with_capacity(pt_coords.len() / 3);
+                    for coords in pt_coords.chunks_exact(3) {
+                        pts.push([coords[0], coords[1], coords[2]]);
+                    }
+
+                    // Mappings to original topology. This is used when the topology must be modified when converting to PolyMesh.
+                    let mut cell_idx_map = Vec::new();
+                    let mut cell_vtx_idx_map = Vec::new();
+
+                    let mut num_faces = 0;
+
+                    let mut faces = Vec::new();
+
+                    let mut append_topo = |topo: model::VertexNumbers| {
+                        cell_idx_map.extend(num_faces..num_faces + topo.num_cells());
+                        num_faces += topo.num_cells();
+                        let (connectivity, offsets) = topo.into_xml();
+                        let mut begin = 0;
+                        for &offset in offsets.iter() {
+                            let end = offset as usize;
+                            cell_vtx_idx_map.extend(begin..end);
+                            faces.push(end - begin);
+                            faces.extend(connectivity[begin..end].iter().map(|&i| i as usize));
+                            begin = end;
                         }
+                    };
 
-                        // Mappings to original topology. This is used when the topology must be modified when converting to PolyMesh.
-                        let mut cell_idx_map = Vec::new();
-                        let mut cell_vtx_idx_map = Vec::new();
+                    polys.map(&mut append_topo);
+                    strips.map(&mut append_topo);
 
-                        let mut num_faces = 0;
-
-                        let mut faces = Vec::new();
-
-                        let mut append_topo = |topo: model::VertexNumbers| {
-                            cell_idx_map.extend(num_faces..num_faces + topo.num_cells());
-                            num_faces += topo.num_cells();
-                            let (connectivity, offsets) = topo.into_xml();
-                            let mut begin = 0;
-                            for &offset in offsets.iter() {
-                                let end = offset as usize;
-                                cell_vtx_idx_map.extend(begin..end);
-                                faces.push(end - begin);
-                                faces.extend(connectivity[begin..end].iter().map(|&i| i as usize));
-                                begin = end;
+                    if let Some(topo) = lines {
+                        let (connectivity, offsets) = topo.into_xml();
+                        let mut begin = 0;
+                        for (orig_face_idx, &offset) in offsets.iter().enumerate() {
+                            // Each polyline is broken into multiple 2-vertex line segments.
+                            for i in begin..offset as usize - 1 {
+                                cell_idx_map.push(num_faces + orig_face_idx);
+                                cell_vtx_idx_map.push(i - begin);
+                                cell_vtx_idx_map.push(i + 1 - begin);
+                                faces.push(2);
+                                faces.push(connectivity[i] as usize);
+                                faces.push(connectivity[i + 1] as usize);
                             }
-                        };
-
-                        polys.map(&mut append_topo);
-                        strips.map(&mut append_topo);
-
-                        if let Some(topo) = lines {
-                            let (connectivity, offsets) = topo.into_xml();
-                            let mut begin = 0;
-                            for (orig_face_idx, &offset) in offsets.iter().enumerate() {
-                                // Each polyline is broken into multiple 2-vertex line segments.
-                                for i in begin..offset as usize - 1 {
-                                    cell_idx_map.push(num_faces + orig_face_idx);
-                                    cell_vtx_idx_map.push(i - begin);
-                                    cell_vtx_idx_map.push(i + 1 - begin);
-                                    faces.push(2);
-                                    faces.push(connectivity[i] as usize);
-                                    faces.push(connectivity[i + 1] as usize);
-                                }
-                                begin = offset as usize;
-                            }
+                            begin = offset as usize;
                         }
+                    }
 
-                        let mut polymesh = PolyMesh::new(pts, &faces);
+                    let mut polymesh = PolyMesh::new(pts, &faces);
 
-                        // Populate point attributes.
-                        vtk_to_mesh_attrib::<_, VertexIndex>(data.point, &mut polymesh, None);
+                    // Populate point attributes.
+                    vtk_to_mesh_attrib::<_, VertexIndex>(data.point, &mut polymesh, None);
 
-                        // Populate face attributes
-                        let remainder = vtk_to_mesh_attrib::<_, FaceIndex>(
-                            data.cell,
-                            &mut polymesh,
-                            Some(cell_idx_map.as_slice()),
-                        );
+                    // Populate face attributes
+                    let remainder = vtk_to_mesh_attrib::<_, FaceIndex>(
+                        data.cell,
+                        &mut polymesh,
+                        Some(cell_idx_map.as_slice()),
+                    );
 
-                        // Populate face vertex attributes.
-                        vtk_field_to_mesh_attrib(
-                            remainder,
-                            &mut polymesh,
-                            Some(cell_vtx_idx_map.as_slice()),
-                        );
+                    // Populate face vertex attributes.
+                    vtk_field_to_mesh_attrib(
+                        remainder,
+                        &mut polymesh,
+                        Some(cell_vtx_idx_map.as_slice()),
+                    );
 
-                        Some(polymesh)
-                    },
-                )))
+                    Some(polymesh)
+                })))
             }
             _ => Err(Error::UnsupportedDataFormat),
         }
@@ -441,73 +439,71 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
         } = &self;
         match data {
             model::DataSet::UnstructuredGrid { pieces, .. } => {
-                Ok(TetMesh::merge_iter(pieces.into_iter().filter_map(
-                    |piece| {
-                        let model::UnstructuredGridPiece {
-                            points,
-                            cells: model::Cells { cell_verts, types },
-                            data,
-                        } = piece
-                            .load_piece_data(file_path.as_ref().map(AsRef::as_ref))
-                            .ok()?;
-                        // Get points.
-                        let pt_coords: Vec<T> = points.cast_into()?;
-                        let mut pts = Vec::with_capacity(pt_coords.len() / 3);
-                        for coords in pt_coords.chunks_exact(3) {
-                            pts.push([coords[0], coords[1], coords[2]]);
-                        }
+                Ok(TetMesh::merge_iter(pieces.iter().filter_map(|piece| {
+                    let model::UnstructuredGridPiece {
+                        points,
+                        cells: model::Cells { cell_verts, types },
+                        data,
+                    } = piece
+                        .load_piece_data(file_path.as_ref().map(AsRef::as_ref))
+                        .ok()?;
+                    // Get points.
+                    let pt_coords: Vec<T> = points.cast_into()?;
+                    let mut pts = Vec::with_capacity(pt_coords.len() / 3);
+                    for coords in pt_coords.chunks_exact(3) {
+                        pts.push([coords[0], coords[1], coords[2]]);
+                    }
 
-                        let num_cells = cell_verts.num_cells();
-                        let (connectivity, offsets) = cell_verts.into_xml();
+                    let num_cells = cell_verts.num_cells();
+                    let (connectivity, offsets) = cell_verts.into_xml();
 
-                        // Mapping to original topology. This is used when the vtk file has elements other than tets.
-                        let mut orig_cell_idx = Vec::with_capacity(num_cells);
+                    // Mapping to original topology. This is used when the vtk file has elements other than tets.
+                    let mut orig_cell_idx = Vec::with_capacity(num_cells);
 
-                        // Get contiguous indices (4 vertex indices for each tet).
-                        let mut begin = 0usize;
-                        let mut indices = Vec::new();
-                        for (c, &end) in offsets.iter().enumerate() {
-                            let n = end as usize - begin;
+                    // Get contiguous indices (4 vertex indices for each tet).
+                    let mut begin = 0usize;
+                    let mut indices = Vec::new();
+                    for (c, &end) in offsets.iter().enumerate() {
+                        let n = end as usize - begin;
 
-                            if n != 4 || types[c] != model::CellType::Tetra {
-                                // Not a tetrahedron, skip it.
-                                begin = end as usize;
-                                continue;
-                            }
-
-                            orig_cell_idx.push(c);
-                            indices.push([
-                                connectivity[begin + 0] as usize,
-                                connectivity[begin + 1] as usize,
-                                connectivity[begin + 2] as usize,
-                                connectivity[begin + 3] as usize,
-                            ]);
+                        if n != 4 || types[c] != model::CellType::Tetra {
+                            // Not a tetrahedron, skip it.
                             begin = end as usize;
+                            continue;
                         }
 
-                        let mut tetmesh = TetMesh::new(pts, indices);
+                        orig_cell_idx.push(c);
+                        indices.push([
+                            connectivity[begin] as usize,
+                            connectivity[begin + 1] as usize,
+                            connectivity[begin + 2] as usize,
+                            connectivity[begin + 3] as usize,
+                        ]);
+                        begin = end as usize;
+                    }
 
-                        // Don't bother transferring attributes if there are no vertices or cells.
-                        // This supresses some needless size mismatch warnings when the dataset has an
-                        // unstructuredgrid representing something other than a tetmesh.
+                    let mut tetmesh = TetMesh::new(pts, indices);
 
-                        if tetmesh.num_vertices() > 0 {
-                            // Populate point attributes.
-                            vtk_to_mesh_attrib::<_, VertexIndex>(data.point, &mut tetmesh, None);
-                        }
+                    // Don't bother transferring attributes if there are no vertices or cells.
+                    // This supresses some needless size mismatch warnings when the dataset has an
+                    // unstructuredgrid representing something other than a tetmesh.
 
-                        if tetmesh.num_cells() > 0 {
-                            // Populate tet attributes
-                            vtk_to_mesh_attrib::<_, CellIndex>(
-                                data.cell,
-                                &mut tetmesh,
-                                Some(orig_cell_idx.as_slice()),
-                            );
-                        }
+                    if tetmesh.num_vertices() > 0 {
+                        // Populate point attributes.
+                        vtk_to_mesh_attrib::<_, VertexIndex>(data.point, &mut tetmesh, None);
+                    }
 
-                        Some(tetmesh)
-                    },
-                )))
+                    if tetmesh.num_cells() > 0 {
+                        // Populate tet attributes
+                        vtk_to_mesh_attrib::<_, CellIndex>(
+                            data.cell,
+                            &mut tetmesh,
+                            Some(orig_cell_idx.as_slice()),
+                        );
+                    }
+
+                    Some(tetmesh)
+                })))
             }
             _ => Err(Error::UnsupportedDataFormat),
         }
@@ -524,7 +520,7 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
         let mut vertices = Vec::new();
         match data {
             model::DataSet::UnstructuredGrid { pieces, .. } => {
-                let ptcloud = PointCloud::merge_iter(pieces.into_iter().filter_map(|piece| {
+                let ptcloud = PointCloud::merge_iter(pieces.iter().filter_map(|piece| {
                     let model::UnstructuredGridPiece {
                         points,
                         cells: model::Cells { cell_verts, types },
@@ -603,41 +599,39 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                 }
             }
             model::DataSet::PolyData { pieces, .. } => {
-                Ok(PointCloud::merge_iter(pieces.into_iter().filter_map(
-                    |piece| {
-                        let model::PolyDataPiece {
-                            points,
-                            verts,
-                            data,
-                            ..
-                        } = piece.load_piece_data(None).ok()?;
-                        pts.clear();
-                        vertices.clear();
+                Ok(PointCloud::merge_iter(pieces.iter().filter_map(|piece| {
+                    let model::PolyDataPiece {
+                        points,
+                        verts,
+                        data,
+                        ..
+                    } = piece.load_piece_data(None).ok()?;
+                    pts.clear();
+                    vertices.clear();
 
-                        // Get points.
-                        let pt_coords: Vec<T> = points.cast_into()?;
-                        pts.reserve(pt_coords.len() / 3);
-                        for coords in pt_coords.chunks_exact(3) {
-                            pts.push([coords[0], coords[1], coords[2]]);
-                        }
+                    // Get points.
+                    let pt_coords: Vec<T> = points.cast_into()?;
+                    pts.reserve(pt_coords.len() / 3);
+                    for coords in pt_coords.chunks_exact(3) {
+                        pts.push([coords[0], coords[1], coords[2]]);
+                    }
 
-                        // If vertex topology is given use it, otherwise load all vertices.
-                        let mut ptcloud = if let Some(topo) = verts {
-                            let (_, cell_vertices) = topo.into_legacy();
-                            vertices.extend(cell_vertices.into_iter().skip(1).map(|x| x as usize));
-                            let referenced_points: Vec<_> =
-                                vertices.iter().map(|&vtx| pts[vtx]).collect();
-                            PointCloud::new(referenced_points)
-                        } else {
-                            PointCloud::new(pts.clone())
-                        };
+                    // If vertex topology is given use it, otherwise load all vertices.
+                    let mut ptcloud = if let Some(topo) = verts {
+                        let (_, cell_vertices) = topo.into_legacy();
+                        vertices.extend(cell_vertices.into_iter().skip(1).map(|x| x as usize));
+                        let referenced_points: Vec<_> =
+                            vertices.iter().map(|&vtx| pts[vtx]).collect();
+                        PointCloud::new(referenced_points)
+                    } else {
+                        PointCloud::new(pts.clone())
+                    };
 
-                        // Populate point attributes.
-                        vtk_to_mesh_attrib::<_, VertexIndex>(data.point, &mut ptcloud, None);
+                    // Populate point attributes.
+                    vtk_to_mesh_attrib::<_, VertexIndex>(data.point, &mut ptcloud, None);
 
-                        Some(ptcloud)
-                    },
-                )))
+                    Some(ptcloud)
+                })))
             }
             _ => Err(Error::UnsupportedDataFormat),
         }
@@ -951,39 +945,39 @@ where
                         match dim {
                             // Note that only the first found attribute with the same name and location
                             // will be inserted.
-                            1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(&v, name, mesh, orig_map) ),
-                            2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(&v, name, mesh, orig_map) ),
-                            3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(&v, name, mesh, orig_map) ),
-                            4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(&v, name, mesh, orig_map) ),
+                            1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
+                            2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
+                            3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
+                            4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
                             // Other values for dim are not supported by the vtk standard
                             // at the time of this writing.
                              _ => continue,
                         }
                     }
                     model::ElementType::Vectors | model::ElementType::Normals => {
-                        match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(&v, name, mesh, orig_map) )
+                        match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) )
                     }
                     model::ElementType::Tensors => {
-                        match_buf!( &data, v => add_2d_array_attrib::<_,M,I>(&v, name, mesh, orig_map) )
+                        match_buf!( &data, v => add_2d_array_attrib::<_,M,I>(v, name, mesh, orig_map) )
                     }
                     model::ElementType::Generic(dim) => {
                         match dim {
-                            1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(&v, name, mesh, orig_map) ),
-                            2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(&v, name, mesh, orig_map) ),
-                            3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(&v, name, mesh, orig_map) ),
-                            4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(&v, name, mesh, orig_map) ),
-                            5 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U5>(&v, name, mesh, orig_map) ),
-                            6 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U6>(&v, name, mesh, orig_map) ),
-                            7 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U7>(&v, name, mesh, orig_map) ),
-                            8 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U8>(&v, name, mesh, orig_map) ),
-                            9 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U9>(&v, name, mesh, orig_map) ),
-                            10 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U10>(&v, name, mesh, orig_map) ),
-                            11 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U11>(&v, name, mesh, orig_map) ),
-                            12 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U12>(&v, name, mesh, orig_map) ),
-                            13 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U13>(&v, name, mesh, orig_map) ),
-                            14 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U14>(&v, name, mesh, orig_map) ),
-                            15 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U15>(&v, name, mesh, orig_map) ),
-                            16 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U16>(&v, name, mesh, orig_map) ),
+                            1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
+                            2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
+                            3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
+                            4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
+                            5 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U5>(v, name, mesh, orig_map) ),
+                            6 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U6>(v, name, mesh, orig_map) ),
+                            7 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U7>(v, name, mesh, orig_map) ),
+                            8 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U8>(v, name, mesh, orig_map) ),
+                            9 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U9>(v, name, mesh, orig_map) ),
+                            10 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U10>(v, name, mesh, orig_map) ),
+                            11 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U11>(v, name, mesh, orig_map) ),
+                            12 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U12>(v, name, mesh, orig_map) ),
+                            13 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U13>(v, name, mesh, orig_map) ),
+                            14 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U14>(v, name, mesh, orig_map) ),
+                            15 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U15>(v, name, mesh, orig_map) ),
+                            16 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U16>(v, name, mesh, orig_map) ),
                             _ => continue,
                         }
                     }
@@ -1006,10 +1000,10 @@ where
                     match elem {
                         // Note that only the first found attribute with the same name and location
                         // will be inserted.
-                        1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(&v, name, mesh, orig_map) ),
-                        2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(&v, name, mesh, orig_map) ),
-                        3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(&v, name, mesh, orig_map) ),
-                        4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(&v, name, mesh, orig_map) ),
+                        1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
+                        2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
+                        3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
+                        4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
                         _ => continue,
                     }
                     .unwrap_or_else(|err| eprintln!("WARNING: Field attribute transfer error: {}", err));
@@ -1053,10 +1047,10 @@ fn vtk_field_to_mesh_attrib<M>(
                 match elem {
                     // Note that only the first found attribute with the same name and location
                     // will be inserted.
-                    1 => match_buf!( &data, v => add_array_attrib::<_, _, FaceVertexIndex>(&v, name, mesh, orig_map) ),
-                    2 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U2>(&v, name, mesh, orig_map) ),
-                    3 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U3>(&v, name, mesh, orig_map) ),
-                    4 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U4>(&v, name, mesh, orig_map) ),
+                    1 => match_buf!( &data, v => add_array_attrib::<_, _, FaceVertexIndex>(v, name, mesh, orig_map) ),
+                    2 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U2>(v, name, mesh, orig_map) ),
+                    3 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U3>(v, name, mesh, orig_map) ),
+                    4 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U4>(v, name, mesh, orig_map) ),
                     _ => continue,
                 }
                 .unwrap_or_else(|err| eprintln!("WARNING: Face Vertex Attribute transfer error for \"{}\": {}", name, err))

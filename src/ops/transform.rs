@@ -13,7 +13,7 @@ pub trait Scale<T: Clone> {
     fn scale(&mut self, s: [T; 3]);
     /// Uniformly scale the given object by the given factor in all dimensions.
     fn uniform_scale(&mut self, s: T) {
-        self.scale([s.clone(), s.clone(), s.clone()]);
+        self.scale([s.clone(), s.clone(), s]);
     }
 }
 
@@ -31,7 +31,7 @@ pub trait Rotate<T: RealField> {
         let u = Vector3::from(axis.clone());
         let [x, y, z] = axis;
         let id = Matrix3::identity();
-        let u_skew = u.clone().skew();
+        let u_skew = u.skew();
         let cos_theta = theta.clone().cos();
 
         // Compute rotation matrix

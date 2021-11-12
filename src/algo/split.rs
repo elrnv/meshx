@@ -66,7 +66,7 @@ fn split_attributes_with<A: Clone>(
     let mut comp_attributes = vec![AttribDict::new(); num_components];
     for (name, attrib) in src_dict.iter() {
         // Split the given attribute into one attribute per component.
-        let new_attribs = split_attribute(&attrib, num_components);
+        let new_attribs = split_attribute(attrib, num_components);
         assert_eq!(new_attribs.len(), num_components);
 
         // Save the new attributes to their corresponding attribute dictionaries.

@@ -28,7 +28,7 @@ pub trait Merge {
     {
         let mut iter = iterable.into_iter();
 
-        let mut obj = iter.next().unwrap_or_else(Default::default);
+        let mut obj = iter.next().unwrap_or_default();
 
         for other in iter {
             obj.merge(other);
@@ -51,7 +51,7 @@ pub trait Merge {
     where
         Self: Clone + Default,
     {
-        Self::merge_iter(slice.into_iter().cloned())
+        Self::merge_iter(slice.iter().cloned())
     }
 }
 
