@@ -3,8 +3,7 @@
  * Implementations for common mesh types are also included here.
  */
 
-use crate::mesh::attrib::AttribValueCache;
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use crate::mesh::pointcloud::PointCloud;
 use crate::mesh::polymesh::PolyMesh;
 use crate::mesh::tetmesh::{TetMesh, TetMeshExt};
@@ -912,81 +911,86 @@ mod tests {
         (tetmesh, comp1, comp2)
     }
 
-    fn add_attribs_to_tetmeshes(sample: &mut (TetMeshExt<f64>, TetMeshExt<f64>, TetMeshExt<f64>)) {
+    fn insert_attribs_to_tetmeshes(
+        sample: &mut (TetMeshExt<f64>, TetMeshExt<f64>, TetMeshExt<f64>),
+    ) {
         // Add a sample vertex attribute.
         sample
             .0
-            .add_attrib_data::<usize, VertexIndex>("v", (0..sample.0.num_vertices()).collect())
+            .insert_attrib_data::<usize, VertexIndex>("v", (0..sample.0.num_vertices()).collect())
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, VertexIndex>("v", (0..4).collect())
+            .insert_attrib_data::<usize, VertexIndex>("v", (0..4).collect())
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, VertexIndex>("v", (4..9).collect())
+            .insert_attrib_data::<usize, VertexIndex>("v", (4..9).collect())
             .unwrap();
 
         // Add a sample cell attribute.
         sample
             .0
-            .add_attrib_data::<usize, CellIndex>("c", (0..sample.0.num_cells()).collect())
+            .insert_attrib_data::<usize, CellIndex>("c", (0..sample.0.num_cells()).collect())
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, CellIndex>("c", vec![0])
+            .insert_attrib_data::<usize, CellIndex>("c", vec![0])
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, CellIndex>("c", vec![1, 2])
+            .insert_attrib_data::<usize, CellIndex>("c", vec![1, 2])
             .unwrap();
 
         // Add a sample cell vertex attribute.
         sample
             .0
-            .add_attrib_data::<usize, CellVertexIndex>(
+            .insert_attrib_data::<usize, CellVertexIndex>(
                 "cv",
                 (0..sample.0.num_cells() * 4).collect(),
             )
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, CellVertexIndex>("cv", (0..4).collect())
+            .insert_attrib_data::<usize, CellVertexIndex>("cv", (0..4).collect())
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, CellVertexIndex>("cv", (4..12).collect())
+            .insert_attrib_data::<usize, CellVertexIndex>("cv", (4..12).collect())
             .unwrap();
 
         // Add a sample cell face attribute.
         sample
             .0
-            .add_attrib_data::<usize, CellFaceIndex>("cf", (0..sample.0.num_cells() * 4).collect())
+            .insert_attrib_data::<usize, CellFaceIndex>(
+                "cf",
+                (0..sample.0.num_cells() * 4).collect(),
+            )
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, CellFaceIndex>("cf", (0..4).collect())
+            .insert_attrib_data::<usize, CellFaceIndex>("cf", (0..4).collect())
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, CellFaceIndex>("cf", (4..12).collect())
+            .insert_attrib_data::<usize, CellFaceIndex>("cf", (4..12).collect())
             .unwrap();
 
         // Add a sample vertex cell attribute.
         sample
             .0
-            .add_attrib_data::<usize, VertexCellIndex>(
+            .insert_attrib_data::<usize, VertexCellIndex>(
                 "vc",
                 (0..sample.0.num_cells() * 4).collect(),
             )
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, VertexCellIndex>("vc", (0..4).collect())
+            .insert_attrib_data::<usize, VertexCellIndex>("vc", (0..4).collect())
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, VertexCellIndex>("vc", (4..12).collect())
+            .insert_attrib_data::<usize, VertexCellIndex>("vc", (4..12).collect())
             .unwrap();
     }
 
@@ -996,7 +1000,7 @@ mod tests {
         let mut sample = build_tetmesh_sample();
 
         // Add all the attributes
-        add_attribs_to_tetmeshes(&mut sample);
+        insert_attribs_to_tetmeshes(&mut sample);
         let (tetmesh, mut comp1, comp2) = sample;
 
         comp1.merge(comp2);
@@ -1009,14 +1013,14 @@ mod tests {
         let mut sample = build_tetmesh_sample();
 
         // Add all the attributes
-        add_attribs_to_tetmeshes(&mut sample);
+        insert_attribs_to_tetmeshes(&mut sample);
         let (tetmesh, mut comp1, mut comp2) = sample;
 
         comp1
-            .add_attrib_data::<usize, VertexIndex>("src", (0..comp1.num_vertices()).collect())
+            .insert_attrib_data::<usize, VertexIndex>("src", (0..comp1.num_vertices()).collect())
             .unwrap();
         comp2
-            .add_attrib_data::<usize, VertexIndex>(
+            .insert_attrib_data::<usize, VertexIndex>(
                 "src",
                 (comp1.num_vertices()..comp1.num_vertices() + comp2.num_vertices()).collect(),
             )
@@ -1034,14 +1038,14 @@ mod tests {
         let mut sample = build_tetmesh_sample();
 
         // Add all the attributes
-        add_attribs_to_tetmeshes(&mut sample);
+        insert_attribs_to_tetmeshes(&mut sample);
         let (mut tetmesh, mut comp1, mut comp2) = sample;
 
         comp1
-            .add_attrib_data::<usize, VertexIndex>("src", (0..comp1.num_vertices()).collect())
+            .insert_attrib_data::<usize, VertexIndex>("src", (0..comp1.num_vertices()).collect())
             .unwrap();
         comp2
-            .add_attrib_data::<usize, VertexIndex>(
+            .insert_attrib_data::<usize, VertexIndex>(
                 "src",
                 (comp1.num_vertices()..comp1.num_vertices() + comp2.num_vertices()).collect(),
             )
@@ -1049,13 +1053,13 @@ mod tests {
 
         // Add two attributes with same names but different types.
         comp1
-            .add_attrib_data::<i32, VertexIndex>(
+            .insert_attrib_data::<i32, VertexIndex>(
                 "conflict",
                 (0..comp1.num_vertices() as i32).collect(),
             )
             .unwrap();
         comp2
-            .add_attrib_data::<u64, VertexIndex>(
+            .insert_attrib_data::<u64, VertexIndex>(
                 "conflict",
                 (0..comp2.num_vertices() as u64).collect(),
             )
@@ -1067,7 +1071,7 @@ mod tests {
         conflict_exp.extend(std::iter::repeat(0).take(comp2.num_vertices()));
 
         tetmesh
-            .add_attrib_data::<i32, VertexIndex>("conflict", conflict_exp)
+            .insert_attrib_data::<i32, VertexIndex>("conflict", conflict_exp)
             .unwrap();
 
         let mut res = TetMeshExt::merge_with_vertex_source(&[comp1, comp2], "src").unwrap();
@@ -1080,7 +1084,7 @@ mod tests {
     fn tetmesh_merge_collection() {
         // Generate sample meshes
         let mut sample = build_tetmesh_sample();
-        add_attribs_to_tetmeshes(&mut sample);
+        insert_attribs_to_tetmeshes(&mut sample);
         let (mesh, comp1, comp2) = sample;
 
         let res = Merge::merge_vec(vec![comp1.clone(), comp2.clone()]);
@@ -1093,7 +1097,7 @@ mod tests {
     #[test]
     fn polymesh_merge() {
         let mut sample = build_polymesh_sample();
-        add_attribs_to_polymeshes(&mut sample);
+        insert_attribs_to_polymeshes(&mut sample);
         let (mesh, mut comp1, comp2) = sample;
         comp1.merge(comp2);
         assert_eq!(comp1, mesh);
@@ -1102,7 +1106,7 @@ mod tests {
     #[test]
     fn polymesh_merge_collection() {
         let mut sample = build_polymesh_sample();
-        add_attribs_to_polymeshes(&mut sample);
+        insert_attribs_to_polymeshes(&mut sample);
         let (mesh, comp1, comp2) = sample;
         let res = Merge::merge_vec(vec![comp1.clone(), comp2.clone()]);
         assert_eq!(res, mesh);

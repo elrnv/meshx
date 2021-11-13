@@ -2,7 +2,7 @@ use std::path::Path;
 
 pub use vtkio::Vtk;
 
-use crate::mesh::attrib;
+use crate::attrib;
 use crate::mesh::{PointCloud, PolyMesh, TetMesh};
 
 pub mod obj;

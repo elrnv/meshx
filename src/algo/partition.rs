@@ -11,7 +11,7 @@
  * assumptions on types.
  */
 
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use hashbrown::HashMap;
 use std::hash::Hash;
 
@@ -159,7 +159,7 @@ mod tests {
         // Add an attribute that partitions out the first and last 2 vertices, which correspond to a whole
         // tet.
         tetmesh
-            .add_attrib_data::<usize, VertexIndex>(
+            .insert_attrib_data::<usize, VertexIndex>(
                 "attrib",
                 vec![1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1],
             )
@@ -205,7 +205,7 @@ mod tests {
 
         let data = partition_data(size, 10);
         ptcld
-            .add_attrib_data::<_, VertexIndex>("attrib", data)
+            .insert_attrib_data::<_, VertexIndex>("attrib", data)
             .unwrap();
 
         let (_, num_parts1) = ptcld.partition_by_attrib::<[usize; 3], VertexIndex>("attrib");
@@ -229,7 +229,7 @@ mod tests {
 
         let data = partition_data(size, 100);
         ptcld
-            .add_attrib_data::<_, VertexIndex>("attrib", data)
+            .insert_attrib_data::<_, VertexIndex>("attrib", data)
             .unwrap();
 
         let now = std::time::Instant::now();
@@ -253,7 +253,7 @@ mod tests {
 
         let data = partition_data(size, 100);
         ptcld
-            .add_attrib_data::<_, VertexIndex>("attrib", data)
+            .insert_attrib_data::<_, VertexIndex>("attrib", data)
             .unwrap();
 
         let now = std::time::Instant::now();

@@ -1,6 +1,6 @@
 use objio::{self, Group, IndexTuple, Object, SimplePolygon};
 
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::{PointCloud, PolyMesh, VertexPositions};
 use crate::Real;
@@ -94,7 +94,7 @@ impl<T: Real> MeshExtractor<T> for ObjData {
                         vertex_uvs[vtx_idx] = uv;
                     }
                 }
-                polymesh.add_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, vertex_uvs)?;
+                polymesh.insert_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, vertex_uvs)?;
             }
             TopologyType::FaceVertex => {
                 // We couldn't find a vertex correspondence, so write uvs to the face vertex topology.
@@ -102,7 +102,8 @@ impl<T: Real> MeshExtractor<T> for ObjData {
                     .iter()
                     .map(|idx| idx.map(|idx| obj_texture[idx]).unwrap_or([0.0f32; 2]))
                     .collect();
-                polymesh.add_attrib_data::<_, FaceVertexIndex>(UV_ATTRIB_NAME, face_vertex_uvs)?;
+                polymesh
+                    .insert_attrib_data::<_, FaceVertexIndex>(UV_ATTRIB_NAME, face_vertex_uvs)?;
             }
         }
 
@@ -115,7 +116,8 @@ impl<T: Real> MeshExtractor<T> for ObjData {
                         vertex_normals[vtx_idx] = nml;
                     }
                 }
-                polymesh.add_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, vertex_normals)?;
+                polymesh
+                    .insert_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, vertex_normals)?;
             }
             TopologyType::FaceVertex => {
                 // We couldn't find a vertex correspondence, so write normals to the face vertex topology.
@@ -123,7 +125,7 @@ impl<T: Real> MeshExtractor<T> for ObjData {
                     .iter()
                     .map(|idx| idx.map(|idx| obj_normal[idx]).unwrap_or([0.0f32; 3]))
                     .collect();
-                polymesh.add_attrib_data::<_, FaceVertexIndex>(
+                polymesh.insert_attrib_data::<_, FaceVertexIndex>(
                     NORMAL_ATTRIB_NAME,
                     face_vertex_normals,
                 )?;
@@ -171,10 +173,10 @@ impl<T: Real> MeshExtractor<T> for ObjData {
             }
         }
 
-        polymesh.add_indirect_attrib_data::<FaceIndex>("object", object_names)?;
-        polymesh.add_indirect_attrib_data::<FaceIndex>("group", group_names)?;
+        polymesh.insert_indirect_attrib_data::<FaceIndex>("object", object_names)?;
+        polymesh.insert_indirect_attrib_data::<FaceIndex>("group", group_names)?;
         if let Some(mtl_names) = mtl_names {
-            polymesh.add_indirect_attrib_data::<FaceIndex>("mtl", mtl_names)?;
+            polymesh.insert_indirect_attrib_data::<FaceIndex>("mtl", mtl_names)?;
         }
 
         Ok(polymesh)
@@ -202,12 +204,13 @@ impl<T: Real> MeshExtractor<T> for ObjData {
         // Obj has 2D vertex uvs and vertex normals.
 
         if !self.texture.is_empty() {
-            pointcloud.add_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, self.texture.clone())?;
+            pointcloud
+                .insert_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, self.texture.clone())?;
         }
 
         if !self.normal.is_empty() {
             pointcloud
-                .add_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, self.normal.clone())?;
+                .insert_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, self.normal.clone())?;
         }
 
         // TODO: Add names (see polymesh)
@@ -504,12 +507,12 @@ mod tests {
         let normals = make_normals();
 
         ptcloud
-            .add_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, uvs)
+            .insert_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, uvs)
             .ok()
             .unwrap();
 
         ptcloud
-            .add_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, normals)
+            .insert_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, normals)
             .ok()
             .unwrap();
 
@@ -561,22 +564,22 @@ mod tests {
         let normals = make_normals();
 
         polymesh
-            .add_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, uvs)
+            .insert_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, uvs)
             .ok()
             .unwrap();
 
         polymesh
-            .add_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, normals)
+            .insert_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, normals)
             .ok()
             .unwrap();
 
         polymesh
-            .add_indirect_attrib::<_, FaceIndex>("object", "default".to_string())
+            .insert_indirect_attrib::<_, FaceIndex>("object", "default".to_string())
             .ok()
             .unwrap();
 
         polymesh
-            .add_indirect_attrib::<_, FaceIndex>("group", "default".to_string())
+            .insert_indirect_attrib::<_, FaceIndex>("group", "default".to_string())
             .ok()
             .unwrap();
 

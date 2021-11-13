@@ -2,9 +2,10 @@
  * This module defines routines for dealing with meshes composed of multiple connected components.
  */
 
+use crate::attrib::*;
 use crate::index::*;
 use crate::mesh::topology::*;
-use crate::mesh::{attrib::*, PolyMesh, TetMeshExt, TriMesh};
+use crate::mesh::{PolyMesh, TetMeshExt, TriMesh};
 use crate::Real;
 
 /// A trait defining the primary method for determining connectivity in a mesh.

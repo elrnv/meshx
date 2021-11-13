@@ -1092,6 +1092,20 @@ impl<I> Attribute<I> {
         }
     }
 
+    /// Construct a new attribute with the same data and default element as
+    /// `self`, but corresponding to a different topology.
+    pub fn promote<J>(&self) -> Attribute<J> {
+        Attribute {
+            data: self.data.duplicate_with(|dst, src| {
+                // TODO: add an `extend` implementation to VecDyn
+                for elem in src.iter() {
+                    dst.push_cloned(elem);
+                }
+            }),
+            phantom: PhantomData,
+        }
+    }
+
     /// Construct a new attribute with the same buffer type and default element as `self`.
     #[inline]
     pub fn promote_with<J>(

@@ -2,12 +2,59 @@
  * Traits and algorithms for splitting generic meshes.
  */
 
+use flatk::View;
+
 use super::connectivity::*;
+use crate::attrib::*;
 use crate::index::*;
-use crate::mesh::attrib::AttribValueCache;
 use crate::mesh::topology::*;
-use crate::mesh::{attrib::*, PolyMesh, QuadMesh, TetMesh, TetMeshExt, TriMesh};
+use crate::mesh::unstructured_mesh::CellType;
+use crate::mesh::{Mesh, PolyMesh, QuadMesh, TetMesh, TetMeshExt, TriMesh};
 use crate::Real;
+
+/// Helper to isolate attributes based on the given connectivity info. Same as split_attributes but assuming a single component.
+fn isolate_attributes<A: Clone>(
+    src_dict: &AttribDict<A>,
+    selection: impl Iterator<Item = bool> + Clone,
+    cache: &mut AttribValueCache,
+) -> AttribDict<A> {
+    isolate_attributes_with(src_dict, |attrib| {
+        let mut new_attrib = attrib.duplicate_empty();
+        // Get an iterator of typeless values for this attribute.
+        match &attrib.data {
+            AttributeData::Direct(d) => {
+                selection
+                    .clone()
+                    .zip(d.data_ref().iter())
+                    .filter(|(include, _)| *include)
+                    .for_each(|(_, val_ref)| {
+                        new_attrib
+                            .data
+                            .direct_data_mut()
+                            .unwrap()
+                            .push_cloned(val_ref)
+                            .unwrap();
+                    });
+            }
+            AttributeData::Indirect(i) => {
+                for (_, val_ref) in selection
+                    .clone()
+                    .zip(i.data_ref().iter())
+                    .filter(|(include, _)| *include)
+                {
+                    new_attrib
+                        .data
+                        .indirect_data_mut()
+                        .unwrap()
+                        .push_cloned(val_ref, cache)
+                        .unwrap();
+                }
+            }
+        }
+
+        new_attrib
+    })
+}
 
 /// Helper to split attributes based on the given connectivity info.
 fn split_attributes<A: Clone, I: Into<Option<usize>>>(
@@ -56,6 +103,23 @@ fn split_attributes<A: Clone, I: Into<Option<usize>>>(
     })
 }
 
+/// Helper to isolate attributes using a given closure to transfer data from each source attribute to
+/// the destination collection.
+///
+/// Same as `split_attributes_with` but assuming a single component.
+fn isolate_attributes_with<A: Clone>(
+    src_dict: &AttribDict<A>,
+    mut isolate_attribute: impl FnMut(&Attribute<A>) -> Attribute<A>,
+) -> AttribDict<A> {
+    let mut dst_attributes = AttribDict::new();
+    for (name, attrib) in src_dict.iter() {
+        // Isolate the given attribute a destination one,
+        // and save it to the new attribute dictionary.
+        dst_attributes.insert(name.to_string(), isolate_attribute(attrib));
+    }
+    dst_attributes
+}
+
 /// Helper to split attributes using a given closure to transfer data from each source attribute to
 /// the destination collection of individual empty component attributes.
 fn split_attributes_with<A: Clone>(
@@ -85,8 +149,269 @@ where
     fn split(self, partition: &[usize], num_parts: usize) -> Vec<Self>;
 }
 
-// TODO: Refactor the below implementations by extracting common patterns. This can also be
+// TODO: Refactor the implementations below by extracting common patterns. This can also be
 // combined with implementations conversions between meshes.
+
+/// A typed mesh. Each variant represents a mesh holding a specific type of
+/// element.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypedMesh<T: Real> {
+    Tet(crate::mesh::TetMesh<T>),
+    Tri(crate::mesh::TriMesh<T>),
+}
+
+impl<T: Real> Mesh<T> {
+    /// Splits this mesh into separate meshes, each holding a specific type of element.
+    ///
+    /// This function splits this mesh in a straightforward way by creating a
+    /// single mesh for each cell type in the `types` array.  This means that if
+    /// this mesh was created with two separate blocks of the same type then two
+    /// separate meshes will be created for each block.
+    ///
+    /// Since this mesh allows sharing of vertices between different element
+    /// types, these vertices will be duplicated, so the order of output
+    /// vertices is not guaranteed.
+    ///
+    /// An optional mapping to the original vertex index can be crated via a
+    /// mesh attribute with the given name.  If the given attribute name is
+    /// empty, then no mapping is created.
+    ///
+    /// To recover the original vertex order, you can invoke
+    /// [`sort_vertices_by_key`] using this attribute.
+    ///
+    /// # Examples
+    /// ```
+    /// use meshx::mesh::{Mesh, CellType};
+    /// use meshx::attrib::*;
+    /// use meshx::algo::TypedMesh;
+    /// use meshx::VertexIndex;
+    ///
+    /// let points = vec![
+    ///     [0.0, 0.0, 0.0],
+    ///     [1.0, 0.0, 0.0],
+    ///     [0.0, 1.0, 0.0],
+    ///     [1.0, 1.0, 0.0],
+    ///     [0.0, 0.0, 1.0],
+    ///     [1.0, 0.0, 1.0]];
+    /// let cells = vec![0, 1, 2, // first triangle
+    ///                  1, 3, 2, // second triangle
+    ///                  0, 1, 5, 4]; // tetrahedron
+    /// let counts = vec![2, 1];
+    /// let types = vec![CellType::Triangle, CellType::Tetrahedron];
+    ///
+    /// let mesh = Mesh::from_cells_counts_and_types(points.clone(), cells, counts, types);
+    ///
+    /// let mut meshes = mesh.split_into_typed_meshes("orig_vertex_index").unwrap();
+    ///
+    /// // Optionally sort the vertices according to their original order.
+    /// for mesh in meshes.iter_mut() {
+    ///     match mesh {
+    ///         TypedMesh::Tri(mesh) => {
+    ///             let orig_vtx = mesh.attrib_as_slice::<usize, VertexIndex>("orig_vertex_index").unwrap().to_vec();
+    ///             mesh.sort_vertices_by_key(|i| orig_vtx[i]);
+    ///         }
+    ///         TypedMesh::Tet(mesh) => {
+    ///             let orig_vtx = mesh.attrib_as_slice::<usize, VertexIndex>("orig_vertex_index").unwrap().to_vec();
+    ///             mesh.sort_vertices_by_key(|i| orig_vtx[i]);
+    ///         }
+    ///     }
+    /// }
+    /// if let TypedMesh::Tri(mesh) = &meshes[0] {
+    ///     assert_eq!(mesh.indices.as_slice(), &[[0,1,2], [1,3,2]][..]);
+    ///     assert_eq!(mesh.vertex_positions.as_slice(), points[0..4].to_vec());
+    /// }
+    /// if let TypedMesh::Tet(mesh) = &meshes[1] {
+    ///     assert_eq!(mesh.indices.as_slice(), &[[0,1,3,2]][..]);
+    ///     let expected_pos = [0,1,4,5].iter().map(|&i| points[i]).collect::<Vec<_>>();
+    ///     assert_eq!(mesh.vertex_positions.as_slice(), expected_pos.as_slice());
+    /// }
+    /// ```
+    pub fn split_into_typed_meshes(
+        &self,
+        orig_vertex_index_attrib_name: impl AsRef<str>,
+    ) -> Result<Vec<TypedMesh<T>>, Error> {
+        self.split_into_typed_meshes_impl(orig_vertex_index_attrib_name.as_ref())
+    }
+
+    fn split_into_typed_meshes_impl(
+        &self,
+        orig_vertex_index_attrib_name: &str,
+    ) -> Result<Vec<TypedMesh<T>>, Error> {
+        let mut meshes = Vec::new();
+
+        // Disassemble the mesh.
+        let Mesh {
+            vertex_positions,
+            indices,
+            types,
+            vertex_attributes,
+            cell_attributes,
+            cell_vertex_attributes,
+            .. // Attribute value cache is not transferred.
+        } = self;
+
+        // A view into indices chunked by cell type instead of individual cell.
+        // TODO: Add a method to Clumped to iterate over ChunkedN views of each clump.
+        let mesh_indices =
+            flatk::Chunked::from_offsets(indices.chunks.offsets.view(), indices.data.view());
+
+        let mut new_vertex_index = vec![Index::invalid(); vertex_positions.len()];
+
+        let make_new_indices = |cells: &[usize],
+                                new_vertices: &mut Vec<[T; 3]>,
+                                orig_vertex_index: &mut Vec<usize>,
+                                new_vertex_index: &mut Vec<Index>|
+         -> Vec<usize> {
+            cells
+                .iter()
+                .map(|&index| {
+                    if let Some(new_index) = new_vertex_index[index].into_option() {
+                        new_index
+                    } else {
+                        let new_index = new_vertices.len();
+                        new_vertex_index[index] = Index::new(new_index);
+                        new_vertices.push(vertex_positions[index]);
+                        orig_vertex_index.push(index);
+                        new_index
+                    }
+                })
+                .collect()
+        };
+
+        let mut new_attribute_value_caches = vec![AttribValueCache::default(); types.len()];
+
+        // Split cell_attributes.
+        let cell_partition = indices
+            .chunks
+            .chunk_offsets
+            .sizes()
+            .enumerate()
+            .flat_map(|(i, n)| std::iter::repeat(i).take(n));
+        let new_cell_attributes = split_attributes(
+            cell_attributes,
+            types.len(),
+            cell_partition,
+            &mut new_attribute_value_caches,
+        );
+
+        // Split cell_vertex_attributes.
+        let cell_vertex_partition = indices
+            .chunks
+            .offsets
+            .sizes()
+            .enumerate()
+            .flat_map(|(i, n)| std::iter::repeat(i).take(n));
+        let new_cell_vertex_attributes = split_attributes(
+            cell_vertex_attributes,
+            types.len(),
+            cell_vertex_partition,
+            &mut new_attribute_value_caches,
+        );
+
+        // Map to original vertex index. Only populated if orig_vertex_index_attrib_name is non-empty.
+        let mut orig_vertex_index = Vec::new();
+
+        for (
+            (((cell_type, cells), new_cell_attributes), new_cell_vertex_attributes),
+            mut new_attribute_value_cache,
+        ) in types
+            .iter()
+            .zip(mesh_indices.iter())
+            .zip(new_cell_attributes.into_iter())
+            .zip(new_cell_vertex_attributes.into_iter())
+            .zip(new_attribute_value_caches.into_iter())
+        {
+            orig_vertex_index.clear();
+
+            meshes.push(match cell_type {
+                CellType::Triangle => {
+                    let mut new_vertices = Vec::new();
+                    let new_indices = make_new_indices(
+                        cells,
+                        &mut new_vertices,
+                        &mut orig_vertex_index,
+                        &mut new_vertex_index,
+                    );
+                    let new_vertex_attributes = isolate_attributes(
+                        vertex_attributes,
+                        new_vertex_index.iter().map(|i| i.is_valid()),
+                        &mut new_attribute_value_cache,
+                    );
+
+                    let mut face_attributes = AttribDict::new();
+                    for (name, cell_attrib) in new_cell_attributes.into_iter() {
+                        face_attributes.insert(name, cell_attrib.promote::<FaceIndex>());
+                    }
+                    let mut face_vertex_attributes = AttribDict::new();
+                    for (name, cell_vertex_attrib) in new_cell_vertex_attributes.into_iter() {
+                        face_vertex_attributes
+                            .insert(name, cell_vertex_attrib.promote::<FaceVertexIndex>());
+                    }
+
+                    let mut trimesh = TriMesh {
+                        vertex_positions: IntrinsicAttribute::from_vec(new_vertices),
+                        indices: IntrinsicAttribute::from_vec(
+                            flatk::Chunked3::from_flat(new_indices).into(),
+                        ),
+                        vertex_attributes: new_vertex_attributes,
+                        face_attributes,
+                        face_vertex_attributes,
+                        face_edge_attributes: AttribDict::new(),
+                        attribute_value_cache: new_attribute_value_cache,
+                    };
+
+                    if !orig_vertex_index_attrib_name.is_empty() {
+                        trimesh.set_attrib_data::<_, VertexIndex>(
+                            orig_vertex_index_attrib_name,
+                            orig_vertex_index.clone(),
+                        )?;
+                    }
+
+                    TypedMesh::Tri(trimesh)
+                }
+                CellType::Tetrahedron => {
+                    let mut new_vertices = Vec::new();
+                    let new_indices = make_new_indices(
+                        cells,
+                        &mut new_vertices,
+                        &mut orig_vertex_index,
+                        &mut new_vertex_index,
+                    );
+                    let new_vertex_attributes = isolate_attributes(
+                        vertex_attributes,
+                        new_vertex_index.iter().map(|i| i.is_valid()),
+                        &mut new_attribute_value_cache,
+                    );
+
+                    let mut tetmesh = TetMesh {
+                        vertex_positions: IntrinsicAttribute::from_vec(new_vertices),
+                        indices: IntrinsicAttribute::from_vec(
+                            flatk::Chunked4::from_flat(new_indices).into(),
+                        ),
+                        vertex_attributes: new_vertex_attributes,
+                        cell_attributes: new_cell_attributes,
+                        cell_vertex_attributes: new_cell_vertex_attributes,
+                        cell_face_attributes: AttribDict::new(),
+                        attribute_value_cache: new_attribute_value_cache,
+                    };
+                    if !orig_vertex_index_attrib_name.is_empty() {
+                        tetmesh.set_attrib_data::<_, VertexIndex>(
+                            orig_vertex_index_attrib_name,
+                            orig_vertex_index.clone(),
+                        )?;
+                    }
+
+                    TypedMesh::Tet(tetmesh)
+                }
+            });
+
+            // Clear new_vertex_index array.
+            new_vertex_index.fill(Index::invalid());
+        }
+
+        Ok(meshes)
+    }
+}
 
 impl<T: Real> Split<VertexIndex> for TetMesh<T> {
     #[inline]
@@ -868,13 +1193,13 @@ mod tests {
     fn tetmesh_split_with_vertex_attributes() {
         let (mut tetmesh, mut comp1, mut comp2) = build_tetmesh_sample();
         tetmesh
-            .add_attrib_data::<usize, VertexIndex>("v", (0..tetmesh.num_vertices()).collect())
+            .insert_attrib_data::<usize, VertexIndex>("v", (0..tetmesh.num_vertices()).collect())
             .unwrap();
         comp1
-            .add_attrib_data::<usize, VertexIndex>("v", vec![0, 1, 3, 8])
+            .insert_attrib_data::<usize, VertexIndex>("v", vec![0, 1, 3, 8])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, VertexIndex>("v", vec![2, 4, 5, 6, 7])
+            .insert_attrib_data::<usize, VertexIndex>("v", vec![2, 4, 5, 6, 7])
             .unwrap();
         let res = tetmesh.split_into_connected_components();
         assert_eq!(res, vec![comp1, comp2]);
@@ -884,13 +1209,13 @@ mod tests {
     fn tetmesh_split_with_cell_attributes() {
         let (mut tetmesh, mut comp1, mut comp2) = build_tetmesh_sample();
         tetmesh
-            .add_attrib_data::<usize, CellIndex>("c", (0..tetmesh.num_cells()).collect())
+            .insert_attrib_data::<usize, CellIndex>("c", (0..tetmesh.num_cells()).collect())
             .unwrap();
         comp1
-            .add_attrib_data::<usize, CellIndex>("c", vec![2])
+            .insert_attrib_data::<usize, CellIndex>("c", vec![2])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, CellIndex>("c", vec![0, 1])
+            .insert_attrib_data::<usize, CellIndex>("c", vec![0, 1])
             .unwrap();
         let res = tetmesh.split_into_connected_components();
         assert_eq!(res, vec![comp1, comp2]);
@@ -900,14 +1225,17 @@ mod tests {
     fn tetmesh_split_with_cell_vertex_attributes() {
         let (mut tetmesh, mut comp1, mut comp2) = build_tetmesh_sample();
         tetmesh
-            .add_attrib_data::<usize, CellVertexIndex>("cv", (0..tetmesh.num_cells() * 4).collect())
+            .insert_attrib_data::<usize, CellVertexIndex>(
+                "cv",
+                (0..tetmesh.num_cells() * 4).collect(),
+            )
             .unwrap();
 
         comp1
-            .add_attrib_data::<usize, CellVertexIndex>("cv", vec![8, 9, 10, 11])
+            .insert_attrib_data::<usize, CellVertexIndex>("cv", vec![8, 9, 10, 11])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, CellVertexIndex>("cv", vec![0, 1, 2, 3, 4, 5, 6, 7])
+            .insert_attrib_data::<usize, CellVertexIndex>("cv", vec![0, 1, 2, 3, 4, 5, 6, 7])
             .unwrap();
         let res = tetmesh.split_into_connected_components();
         assert_eq!(res, vec![comp1, comp2]);
@@ -917,14 +1245,17 @@ mod tests {
     fn tetmesh_split_with_cell_face_attributes() {
         let (mut tetmesh, mut comp1, mut comp2) = build_tetmesh_sample();
         tetmesh
-            .add_attrib_data::<usize, CellFaceIndex>("cf", (0..tetmesh.num_cells() * 4).collect())
+            .insert_attrib_data::<usize, CellFaceIndex>(
+                "cf",
+                (0..tetmesh.num_cells() * 4).collect(),
+            )
             .unwrap();
 
         comp1
-            .add_attrib_data::<usize, CellFaceIndex>("cf", vec![8, 9, 10, 11])
+            .insert_attrib_data::<usize, CellFaceIndex>("cf", vec![8, 9, 10, 11])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, CellFaceIndex>("cf", vec![0, 1, 2, 3, 4, 5, 6, 7])
+            .insert_attrib_data::<usize, CellFaceIndex>("cf", vec![0, 1, 2, 3, 4, 5, 6, 7])
             .unwrap();
         let res = tetmesh.split_into_connected_components();
         assert_eq!(res, vec![comp1, comp2]);
@@ -934,14 +1265,17 @@ mod tests {
     fn tetmesh_split_with_vertex_cell_attributes() {
         let (mut tetmesh, mut comp1, mut comp2) = build_tetmesh_sample();
         tetmesh
-            .add_attrib_data::<usize, VertexCellIndex>("vc", (0..tetmesh.num_cells() * 4).collect())
+            .insert_attrib_data::<usize, VertexCellIndex>(
+                "vc",
+                (0..tetmesh.num_cells() * 4).collect(),
+            )
             .unwrap();
 
         comp1
-            .add_attrib_data::<usize, VertexCellIndex>("vc", vec![0, 1, 4, 11])
+            .insert_attrib_data::<usize, VertexCellIndex>("vc", vec![0, 1, 4, 11])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, VertexCellIndex>("vc", vec![2, 3, 5, 6, 7, 8, 9, 10])
+            .insert_attrib_data::<usize, VertexCellIndex>("vc", vec![2, 3, 5, 6, 7, 8, 9, 10])
             .unwrap();
         let res = tetmesh.split_into_connected_components();
         assert_eq!(res, vec![comp1, comp2]);
@@ -951,50 +1285,59 @@ mod tests {
     fn tetmesh_split_with_all_attributes() {
         let (mut tetmesh, mut comp1, mut comp2) = build_tetmesh_sample();
         tetmesh
-            .add_attrib_data::<usize, VertexIndex>("v", (0..tetmesh.num_vertices()).collect())
+            .insert_attrib_data::<usize, VertexIndex>("v", (0..tetmesh.num_vertices()).collect())
             .unwrap();
         tetmesh
-            .add_attrib_data::<usize, CellIndex>("c", (0..tetmesh.num_cells()).collect())
+            .insert_attrib_data::<usize, CellIndex>("c", (0..tetmesh.num_cells()).collect())
             .unwrap();
         tetmesh
-            .add_attrib_data::<usize, CellVertexIndex>("cv", (0..tetmesh.num_cells() * 4).collect())
+            .insert_attrib_data::<usize, CellVertexIndex>(
+                "cv",
+                (0..tetmesh.num_cells() * 4).collect(),
+            )
             .unwrap();
         tetmesh
-            .add_attrib_data::<usize, CellFaceIndex>("cf", (0..tetmesh.num_cells() * 4).collect())
+            .insert_attrib_data::<usize, CellFaceIndex>(
+                "cf",
+                (0..tetmesh.num_cells() * 4).collect(),
+            )
             .unwrap();
         tetmesh
-            .add_attrib_data::<usize, VertexCellIndex>("vc", (0..tetmesh.num_cells() * 4).collect())
+            .insert_attrib_data::<usize, VertexCellIndex>(
+                "vc",
+                (0..tetmesh.num_cells() * 4).collect(),
+            )
             .unwrap();
         comp1
-            .add_attrib_data::<usize, VertexIndex>("v", vec![0, 1, 3, 8])
+            .insert_attrib_data::<usize, VertexIndex>("v", vec![0, 1, 3, 8])
             .unwrap();
         comp1
-            .add_attrib_data::<usize, CellIndex>("c", vec![2])
+            .insert_attrib_data::<usize, CellIndex>("c", vec![2])
             .unwrap();
         comp1
-            .add_attrib_data::<usize, CellVertexIndex>("cv", vec![8, 9, 10, 11])
+            .insert_attrib_data::<usize, CellVertexIndex>("cv", vec![8, 9, 10, 11])
             .unwrap();
         comp1
-            .add_attrib_data::<usize, CellFaceIndex>("cf", vec![8, 9, 10, 11])
+            .insert_attrib_data::<usize, CellFaceIndex>("cf", vec![8, 9, 10, 11])
             .unwrap();
         comp1
-            .add_attrib_data::<usize, VertexCellIndex>("vc", vec![0, 1, 4, 11])
+            .insert_attrib_data::<usize, VertexCellIndex>("vc", vec![0, 1, 4, 11])
             .unwrap();
 
         comp2
-            .add_attrib_data::<usize, VertexIndex>("v", vec![2, 4, 5, 6, 7])
+            .insert_attrib_data::<usize, VertexIndex>("v", vec![2, 4, 5, 6, 7])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, CellIndex>("c", vec![0, 1])
+            .insert_attrib_data::<usize, CellIndex>("c", vec![0, 1])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, CellVertexIndex>("cv", vec![0, 1, 2, 3, 4, 5, 6, 7])
+            .insert_attrib_data::<usize, CellVertexIndex>("cv", vec![0, 1, 2, 3, 4, 5, 6, 7])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, CellFaceIndex>("cf", vec![0, 1, 2, 3, 4, 5, 6, 7])
+            .insert_attrib_data::<usize, CellFaceIndex>("cf", vec![0, 1, 2, 3, 4, 5, 6, 7])
             .unwrap();
         comp2
-            .add_attrib_data::<usize, VertexCellIndex>("vc", vec![2, 3, 5, 6, 7, 8, 9, 10])
+            .insert_attrib_data::<usize, VertexCellIndex>("vc", vec![2, 3, 5, 6, 7, 8, 9, 10])
             .unwrap();
         let res = tetmesh.split_into_connected_components();
         assert_eq!(res, vec![comp1, comp2]);
@@ -1017,7 +1360,7 @@ mod tests {
     #[test]
     fn polymesh_split_with_attributes() {
         let mut sample = build_polymesh_sample();
-        add_attribs_to_polymeshes(&mut sample);
+        insert_attribs_to_polymeshes(&mut sample);
         let (mesh, comp1, comp2) = sample;
         let res = mesh.split_into_connected_components();
         assert_eq!(res, vec![comp1, comp2]);
@@ -1046,11 +1389,11 @@ mod tests {
 
         // Add an arbitrary vertex attribute
         polymesh
-            .add_attrib_data::<usize, VertexIndex>("v", (0..polymesh.num_vertices()).collect())
+            .insert_attrib_data::<usize, VertexIndex>("v", (0..polymesh.num_vertices()).collect())
             .unwrap();
 
         polymesh
-            .add_attrib_data::<usize, FaceVertexIndex>(
+            .insert_attrib_data::<usize, FaceVertexIndex>(
                 "no_split",
                 vec![0, 1, 2, 2, 1, 3, 4, 5, 7, 6, 0, 1, 4, 1, 5, 4],
             )
@@ -1061,7 +1404,7 @@ mod tests {
         assert_eq!(no_split, polymesh);
 
         polymesh
-            .add_attrib_data::<i32, FaceVertexIndex>(
+            .insert_attrib_data::<i32, FaceVertexIndex>(
                 "vertex1_split",
                 vec![0, 10, 2, 2, 11, 3, 4, 5, 7, 6, 0, 12, 4, 13, 5, 4],
             )
@@ -1084,7 +1427,7 @@ mod tests {
         );
 
         polymesh
-            .add_attrib_data::<usize, FaceVertexIndex>(
+            .insert_attrib_data::<usize, FaceVertexIndex>(
                 "full_split",
                 (0..polymesh.num_face_vertices()).collect(),
             )
@@ -1125,10 +1468,10 @@ mod tests {
         let mut mesh = TriMesh::new(verts, indices);
 
         // Add an arbitrary vertex attribute
-        mesh.add_attrib_data::<usize, VertexIndex>("v", (0..mesh.num_vertices()).collect())
+        mesh.insert_attrib_data::<usize, VertexIndex>("v", (0..mesh.num_vertices()).collect())
             .unwrap();
 
-        mesh.add_attrib_data::<usize, FaceVertexIndex>(
+        mesh.insert_attrib_data::<usize, FaceVertexIndex>(
             "no_split",
             vec![0, 1, 2, 2, 1, 3, 4, 5, 6, 6, 5, 7, 0, 1, 4, 1, 5, 4],
         )
@@ -1138,7 +1481,7 @@ mod tests {
         no_split.split_vertices_by_face_vertex_attrib("no_split");
         assert_eq!(no_split, mesh);
 
-        mesh.add_attrib_data::<f32, FaceVertexIndex>(
+        mesh.insert_attrib_data::<f32, FaceVertexIndex>(
             "vertex1_split",
             vec![
                 0.0f32,
@@ -1176,7 +1519,7 @@ mod tests {
             Ok(&[0, 1, 2, 3, 4, 5, 6, 7, 1, 1, 1][..])
         );
 
-        mesh.add_attrib_data::<usize, FaceVertexIndex>(
+        mesh.insert_attrib_data::<usize, FaceVertexIndex>(
             "full_split",
             (0..mesh.num_face_vertices()).collect(),
         )
@@ -1228,7 +1571,7 @@ mod tests {
         // there are no more collisions.
         // This tests both functions: split_vertices_by_face_vertex_attrib and attrib_promote.
 
-        mesh.add_attrib_data::<[f32; 2], FaceVertexIndex>(
+        mesh.insert_attrib_data::<[f32; 2], FaceVertexIndex>(
             "uv",
             vec![
                 [0.630043, 0.00107052],
@@ -1309,7 +1652,7 @@ mod tests {
         // there are no more collisions.
         // This tests both functions: split_vertices_by_face_vertex_attrib and attrib_promote.
 
-        mesh.add_attrib_data::<[f32; 2], FaceVertexIndex>(
+        mesh.insert_attrib_data::<[f32; 2], FaceVertexIndex>(
             "uv",
             vec![
                 [0.630043, 0.00107052],

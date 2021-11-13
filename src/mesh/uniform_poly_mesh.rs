@@ -2,7 +2,7 @@ mod extended;
 
 pub use extended::*;
 
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::VertexPositions;
 use crate::mesh::PolyMesh;
@@ -99,26 +99,19 @@ macro_rules! impl_uniform_surface_mesh {
                 self
             }
 
-            /// Sort vertices by the given key values.
-            pub fn sort_vertices_by_key<K, F>(&mut self, f: F)
-            where
-                F: FnMut(usize) -> K,
-                K: Ord,
-            {
-                if self.num_vertices() == 0 {
-                    return;
-                }
-                self.sort_vertices_by_key_impl(f);
-            }
-
             /// Sort vertices by the given key values, and return the reulting order (permutation).
             ///
             /// This function assumes we have at least one vertex.
-            pub(crate) fn sort_vertices_by_key_impl<K, F>(&mut self, mut f: F) -> Vec<usize>
+            pub fn sort_vertices_by_key<K, F>(&mut self, mut f: F) -> Vec<usize>
             where
                 F: FnMut(usize) -> K,
                 K: Ord,
             {
+                // Early exit.
+                if self.num_vertices() == 0 {
+                    return Vec::new();
+                }
+
                 let num = self.attrib_size::<VertexIndex>();
                 debug_assert!(num > 0);
 
@@ -131,11 +124,11 @@ macro_rules! impl_uniform_surface_mesh {
                 // Now sort all mesh data according to the sorting given by order.
 
                 let $mesh_type {
-                                                                    ref mut vertex_positions,
-                                                                    ref mut indices,
-                                                                    ref mut vertex_attributes,
-                                                                    .. // face and face_{vertex,edge} attributes are unchanged
-                                                                } = *self;
+                    ref mut vertex_positions,
+                    ref mut indices,
+                    ref mut vertex_attributes,
+                    .. // face and face_{vertex,edge} attributes are unchanged
+                } = *self;
 
                 let mut seen = vec![false; vertex_positions.len()];
 
@@ -601,7 +594,7 @@ mod tests {
 
         // Verify exact values.
         trimesh
-            .add_attrib_data::<usize, VertexIndex>("i", vec![0, 1, 2, 3, 4])
+            .insert_attrib_data::<usize, VertexIndex>("i", vec![0, 1, 2, 3, 4])
             .unwrap();
 
         trimesh.sort_vertices_by_key(|k| values[k]);
@@ -697,24 +690,26 @@ mod tests {
         ];
 
         let mut polymesh = crate::mesh::PolyMesh::new(points.clone(), &faces);
-        polymesh.add_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5, 6])?;
-        polymesh.add_attrib_data::<u64, FaceIndex>("f", vec![1, 2, 3])?;
+        polymesh.insert_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5, 6])?;
+        polymesh.insert_attrib_data::<u64, FaceIndex>("f", vec![1, 2, 3])?;
+        polymesh.insert_attrib_data::<u64, FaceVertexIndex>(
+            "vf",
+            vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        )?;
         polymesh
-            .add_attrib_data::<u64, FaceVertexIndex>("vf", vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])?;
-        polymesh
-            .add_attrib_data::<u64, FaceEdgeIndex>("ve", vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])?;
+            .insert_attrib_data::<u64, FaceEdgeIndex>("ve", vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])?;
 
         let mut trimesh = TriMesh::new(
             points.clone(),
             vec![[0, 1, 2], [0, 1, 5], [0, 5, 4], [1, 3, 2]],
         );
-        trimesh.add_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5, 6])?;
-        trimesh.add_attrib_data::<u64, FaceIndex>("f", vec![1, 2, 2, 3])?;
-        trimesh.add_attrib_data::<u64, FaceVertexIndex>(
+        trimesh.insert_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5, 6])?;
+        trimesh.insert_attrib_data::<u64, FaceIndex>("f", vec![1, 2, 2, 3])?;
+        trimesh.insert_attrib_data::<u64, FaceVertexIndex>(
             "vf",
             vec![1, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10],
         )?;
-        trimesh.add_attrib_data::<u64, FaceEdgeIndex>(
+        trimesh.insert_attrib_data::<u64, FaceEdgeIndex>(
             "ve",
             vec![1, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10],
         )?;
@@ -741,10 +736,11 @@ mod tests {
         ];
 
         let mut polymesh = crate::mesh::PolyMesh::new(points.clone(), &faces);
-        polymesh.add_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5, 6])?;
-        polymesh.add_attrib_data::<u64, FaceIndex>("f", vec![1, 2, 3])?;
-        polymesh.add_attrib_data::<u64, FaceVertexIndex>("vf", vec![1, 2, 3, 4, 5, 6, 7, 8, 9])?;
-        polymesh.add_attrib_data::<u64, FaceEdgeIndex>("ve", vec![1, 2, 3, 4, 5, 6, 7, 8, 9])?;
+        polymesh.insert_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5, 6])?;
+        polymesh.insert_attrib_data::<u64, FaceIndex>("f", vec![1, 2, 3])?;
+        polymesh
+            .insert_attrib_data::<u64, FaceVertexIndex>("vf", vec![1, 2, 3, 4, 5, 6, 7, 8, 9])?;
+        polymesh.insert_attrib_data::<u64, FaceEdgeIndex>("ve", vec![1, 2, 3, 4, 5, 6, 7, 8, 9])?;
 
         let mut linemesh = LineMesh::new(
             points.clone(),
@@ -759,13 +755,13 @@ mod tests {
                 [1, 3],
             ],
         );
-        linemesh.add_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5, 6])?;
-        linemesh.add_attrib_data::<u64, FaceIndex>("f", vec![1, 1, 1, 2, 2, 2, 2, 3])?;
-        linemesh.add_attrib_data::<u64, FaceVertexIndex>(
+        linemesh.insert_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5, 6])?;
+        linemesh.insert_attrib_data::<u64, FaceIndex>("f", vec![1, 1, 1, 2, 2, 2, 2, 3])?;
+        linemesh.insert_attrib_data::<u64, FaceVertexIndex>(
             "vf",
             vec![1, 2, 2, 3, 3, 1, 4, 5, 5, 6, 6, 7, 7, 4, 8, 9],
         )?;
-        linemesh.add_attrib_data::<u64, FaceEdgeIndex>(
+        linemesh.insert_attrib_data::<u64, FaceEdgeIndex>(
             "ve",
             vec![1, 2, 2, 3, 3, 1, 4, 5, 5, 6, 6, 7, 7, 4, 8, 9],
         )?;

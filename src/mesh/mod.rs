@@ -4,10 +4,6 @@ pub mod builder;
 pub mod topology;
 pub mod transform_impl;
 
-/// Attribute module. This specifies the interface required to read/write attributes
-/// from/to different mesh components.
-pub mod attrib;
-
 pub mod pointcloud;
 pub mod polymesh;
 /// Macro to implement constant size slice iterator.
@@ -81,7 +77,6 @@ pub mod unstructured_mesh;
 pub mod vertex_positions;
 
 // Re-export meshes and traits
-pub use self::attrib::Attrib;
 pub use self::pointcloud::*;
 pub use self::polymesh::*;
 pub use self::tetmesh::*;
@@ -89,8 +84,8 @@ pub use self::uniform_poly_mesh::*;
 pub use self::unstructured_mesh::*;
 pub use self::vertex_positions::*; // reexport intrinsic attribute
 
-use self::attrib::VertexAttrib;
 use self::topology::NumVertices;
+use super::attrib::{Attrib, VertexAttrib};
 
 /// VertexMesh is a marker trait to allow user code to be generic over vertex centric meshes with
 /// intrinsic vertex positions attributes.

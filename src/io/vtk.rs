@@ -1,5 +1,5 @@
 use crate::algo::merge::Merge;
-use crate::mesh::attrib::{Attrib, AttribDict, AttribIndex, Attribute, AttributeValue};
+use crate::attrib::{Attrib, AttribDict, AttribIndex, Attribute, AttributeValue};
 use crate::mesh::topology::*;
 use crate::mesh::{PointCloud, PolyMesh, TetMesh, VertexPositions};
 use flatk::{
@@ -841,7 +841,7 @@ fn mesh_to_vtk_named_field_attribs<I>(
     }
 }
 
-fn add_2d_array_attrib<'a, T, M, I>(
+fn insert_2d_array_attrib<'a, T, M, I>(
     buf: &[T],
     name: &'a str,
     mesh: &mut M,
@@ -869,11 +869,11 @@ where
     } else {
         buf.iter().cloned().for_each(push_val);
     }
-    mesh.add_attrib_data::<_, I>(name, vecs)?;
+    mesh.insert_attrib_data::<_, I>(name, vecs)?;
     Ok(())
 }
 
-fn add_array_attrib<'a, T, M, I>(
+fn insert_array_attrib<'a, T, M, I>(
     buf: &[T],
     name: &'a str,
     mesh: &mut M,
@@ -889,11 +889,11 @@ where
     } else {
         buf.to_vec()
     };
-    mesh.add_attrib_data::<_, I>(name, remapped_buf)?;
+    mesh.insert_attrib_data::<_, I>(name, remapped_buf)?;
     Ok(())
 }
 
-fn add_array_attrib_n<'a, T, M, I: AttribIndex<M>, N>(
+fn insert_array_attrib_n<'a, T, M, I: AttribIndex<M>, N>(
     buf: &[T],
     name: &'a str,
     mesh: &mut M,
@@ -914,7 +914,7 @@ where
         buf.to_vec()
     };
     let chunked = flatk::UniChunked::<_, U<N>>::from_flat(remapped_buf);
-    mesh.add_attrib_data::<_, I>(name, chunked.into_arrays())?;
+    mesh.insert_attrib_data::<_, I>(name, chunked.into_arrays())?;
     Ok(())
 }
 
@@ -945,39 +945,39 @@ where
                         match dim {
                             // Note that only the first found attribute with the same name and location
                             // will be inserted.
-                            1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
-                            2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
-                            3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
-                            4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
+                            1 => match_buf!( &data, v => insert_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
+                            2 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
+                            3 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
+                            4 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
                             // Other values for dim are not supported by the vtk standard
                             // at the time of this writing.
                              _ => continue,
                         }
                     }
                     model::ElementType::Vectors | model::ElementType::Normals => {
-                        match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) )
+                        match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) )
                     }
                     model::ElementType::Tensors => {
-                        match_buf!( &data, v => add_2d_array_attrib::<_,M,I>(v, name, mesh, orig_map) )
+                        match_buf!( &data, v => insert_2d_array_attrib::<_,M,I>(v, name, mesh, orig_map) )
                     }
                     model::ElementType::Generic(dim) => {
                         match dim {
-                            1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
-                            2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
-                            3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
-                            4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
-                            5 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U5>(v, name, mesh, orig_map) ),
-                            6 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U6>(v, name, mesh, orig_map) ),
-                            7 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U7>(v, name, mesh, orig_map) ),
-                            8 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U8>(v, name, mesh, orig_map) ),
-                            9 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U9>(v, name, mesh, orig_map) ),
-                            10 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U10>(v, name, mesh, orig_map) ),
-                            11 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U11>(v, name, mesh, orig_map) ),
-                            12 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U12>(v, name, mesh, orig_map) ),
-                            13 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U13>(v, name, mesh, orig_map) ),
-                            14 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U14>(v, name, mesh, orig_map) ),
-                            15 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U15>(v, name, mesh, orig_map) ),
-                            16 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U16>(v, name, mesh, orig_map) ),
+                            1 => match_buf!( &data, v => insert_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
+                            2 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
+                            3 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
+                            4 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
+                            5 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U5>(v, name, mesh, orig_map) ),
+                            6 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U6>(v, name, mesh, orig_map) ),
+                            7 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U7>(v, name, mesh, orig_map) ),
+                            8 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U8>(v, name, mesh, orig_map) ),
+                            9 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U9>(v, name, mesh, orig_map) ),
+                            10 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U10>(v, name, mesh, orig_map) ),
+                            11 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U11>(v, name, mesh, orig_map) ),
+                            12 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U12>(v, name, mesh, orig_map) ),
+                            13 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U13>(v, name, mesh, orig_map) ),
+                            14 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U14>(v, name, mesh, orig_map) ),
+                            15 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U15>(v, name, mesh, orig_map) ),
+                            16 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U16>(v, name, mesh, orig_map) ),
                             _ => continue,
                         }
                     }
@@ -1000,10 +1000,10 @@ where
                     match elem {
                         // Note that only the first found attribute with the same name and location
                         // will be inserted.
-                        1 => match_buf!( &data, v => add_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
-                        2 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
-                        3 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
-                        4 => match_buf!( &data, v => add_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
+                        1 => match_buf!( &data, v => insert_array_attrib::<_,M,I>(v, name, mesh, orig_map) ),
+                        2 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U2>(v, name, mesh, orig_map) ),
+                        3 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U3>(v, name, mesh, orig_map) ),
+                        4 => match_buf!( &data, v => insert_array_attrib_n::<_,M,I,U4>(v, name, mesh, orig_map) ),
                         _ => continue,
                     }
                     .unwrap_or_else(|err| eprintln!("WARNING: Field attribute transfer error: {}", err));
@@ -1047,10 +1047,10 @@ fn vtk_field_to_mesh_attrib<M>(
                 match elem {
                     // Note that only the first found attribute with the same name and location
                     // will be inserted.
-                    1 => match_buf!( &data, v => add_array_attrib::<_, _, FaceVertexIndex>(v, name, mesh, orig_map) ),
-                    2 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U2>(v, name, mesh, orig_map) ),
-                    3 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U3>(v, name, mesh, orig_map) ),
-                    4 => match_buf!( &data, v => add_array_attrib_n::<_, _, FaceVertexIndex,U4>(v, name, mesh, orig_map) ),
+                    1 => match_buf!( &data, v => insert_array_attrib::<_, _, FaceVertexIndex>(v, name, mesh, orig_map) ),
+                    2 => match_buf!( &data, v => insert_array_attrib_n::<_, _, FaceVertexIndex,U2>(v, name, mesh, orig_map) ),
+                    3 => match_buf!( &data, v => insert_array_attrib_n::<_, _, FaceVertexIndex,U3>(v, name, mesh, orig_map) ),
+                    4 => match_buf!( &data, v => insert_array_attrib_n::<_, _, FaceVertexIndex,U4>(v, name, mesh, orig_map) ),
                     _ => continue,
                 }
                 .unwrap_or_else(|err| eprintln!("WARNING: Face Vertex Attribute transfer error for \"{}\": {}", name, err))
@@ -1153,16 +1153,16 @@ mod tests {
         ];
 
         tetmesh
-            .add_attrib_data::<_, VertexIndex>("scalars", scalars)
+            .insert_attrib_data::<_, VertexIndex>("scalars", scalars)
             .ok()
             .unwrap();
 
         tetmesh
-            .add_attrib_data::<_, VertexIndex>("tensors", tensors)
+            .insert_attrib_data::<_, VertexIndex>("tensors", tensors)
             .ok()
             .unwrap();
         tetmesh
-            .add_attrib_data::<_, VertexIndex>("vectors", vectors)
+            .insert_attrib_data::<_, VertexIndex>("vectors", vectors)
             .ok()
             .unwrap();
 
@@ -1255,19 +1255,19 @@ mod tests {
         ];
 
         polymesh
-            .add_attrib_data::<_, FaceIndex>("scalars", face_scalars)
+            .insert_attrib_data::<_, FaceIndex>("scalars", face_scalars)
             .unwrap();
 
         polymesh
-            .add_attrib_data::<_, VertexIndex>("scalars", scalars)
+            .insert_attrib_data::<_, VertexIndex>("scalars", scalars)
             .unwrap();
 
         polymesh
-            .add_attrib_data::<_, VertexIndex>("tensors", tensors)
+            .insert_attrib_data::<_, VertexIndex>("tensors", tensors)
             .unwrap();
 
         polymesh
-            .add_attrib_data::<_, VertexIndex>("vectors", vectors)
+            .insert_attrib_data::<_, VertexIndex>("vectors", vectors)
             .unwrap();
 
         polymesh
@@ -1354,19 +1354,19 @@ mod tests {
         ];
 
         polymesh
-            .add_attrib_data::<_, FaceIndex>("scalars", face_scalars)
+            .insert_attrib_data::<_, FaceIndex>("scalars", face_scalars)
             .unwrap();
 
         polymesh
-            .add_attrib_data::<_, VertexIndex>("scalars", scalars)
+            .insert_attrib_data::<_, VertexIndex>("scalars", scalars)
             .unwrap();
 
         polymesh
-            .add_attrib_data::<_, VertexIndex>("tensors", tensors)
+            .insert_attrib_data::<_, VertexIndex>("tensors", tensors)
             .unwrap();
 
         polymesh
-            .add_attrib_data::<_, VertexIndex>("vectors", vectors)
+            .insert_attrib_data::<_, VertexIndex>("vectors", vectors)
             .unwrap();
 
         polymesh
@@ -1546,14 +1546,14 @@ mod tests {
         ];
 
         pointcloud
-            .add_attrib_data::<_, VertexIndex>("scalars", scalars)
+            .insert_attrib_data::<_, VertexIndex>("scalars", scalars)
             .unwrap();
 
         pointcloud
-            .add_attrib_data::<_, VertexIndex>("tensors", tensors)
+            .insert_attrib_data::<_, VertexIndex>("tensors", tensors)
             .unwrap();
         pointcloud
-            .add_attrib_data::<_, VertexIndex>("vectors", vectors)
+            .insert_attrib_data::<_, VertexIndex>("vectors", vectors)
             .unwrap();
 
         pointcloud

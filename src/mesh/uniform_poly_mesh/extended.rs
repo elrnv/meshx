@@ -5,7 +5,7 @@
 
 use super::{QuadMesh, TriMesh};
 
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::VertexPositions;
 use crate::prim::Triangle;
@@ -116,7 +116,7 @@ macro_rules! impl_uniform_surface_mesh {
                                                                             .. // face and face_{vertex,edge} attributes are unchanged
                                                                         } = *self;
 
-                let order = base_mesh.sort_vertices_by_key_impl(f);
+                let order = base_mesh.sort_vertices_by_key(f);
 
                 // Can't easily do this in place, so just for simplicity's sake we use extra memory
                 // for transferring dual topology.
@@ -401,7 +401,7 @@ mod tests {
 
         // Verify exact values.
         trimesh
-            .add_attrib_data::<usize, VertexIndex>("i", vec![0, 1, 2, 3, 4])
+            .insert_attrib_data::<usize, VertexIndex>("i", vec![0, 1, 2, 3, 4])
             .unwrap();
 
         trimesh.sort_vertices_by_key(|k| values[k]);

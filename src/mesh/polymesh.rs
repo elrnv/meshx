@@ -3,7 +3,7 @@
 //! polygons of variable size.
 //!
 
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::VertexPositions;
 use crate::Real;

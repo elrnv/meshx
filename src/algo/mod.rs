@@ -14,7 +14,8 @@ pub use self::split::*;
 /// Useful utilities for testing algorithms in this module.
 #[cfg(test)]
 pub(crate) mod test_utils {
-    use crate::mesh::{attrib::*, topology::*};
+    use crate::attrib::*;
+    use crate::mesh::topology::*;
     type PolyMesh = crate::mesh::PolyMesh<f64>;
 
     pub(crate) fn build_polymesh_sample() -> (PolyMesh, PolyMesh, PolyMesh) {
@@ -55,83 +56,88 @@ pub(crate) mod test_utils {
         (mesh, comp1, comp2)
     }
 
-    pub(crate) fn add_vertex_attrib_to_polymeshes(sample: &mut (PolyMesh, PolyMesh, PolyMesh)) {
+    pub(crate) fn insert_vertex_attrib_to_polymeshes(sample: &mut (PolyMesh, PolyMesh, PolyMesh)) {
         sample
             .0
-            .add_attrib_data::<usize, VertexIndex>("v", (0..sample.0.num_vertices()).collect())
+            .insert_attrib_data::<usize, VertexIndex>("v", (0..sample.0.num_vertices()).collect())
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, VertexIndex>("v", vec![0, 1, 2, 3])
+            .insert_attrib_data::<usize, VertexIndex>("v", vec![0, 1, 2, 3])
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, VertexIndex>("v", vec![4, 5, 6, 7])
+            .insert_attrib_data::<usize, VertexIndex>("v", vec![4, 5, 6, 7])
             .unwrap();
     }
 
-    pub(crate) fn add_face_attrib_to_polymeshes(sample: &mut (PolyMesh, PolyMesh, PolyMesh)) {
+    pub(crate) fn insert_face_attrib_to_polymeshes(sample: &mut (PolyMesh, PolyMesh, PolyMesh)) {
         sample
             .0
-            .add_attrib_data::<usize, FaceIndex>("f", (0..sample.0.num_faces()).collect())
+            .insert_attrib_data::<usize, FaceIndex>("f", (0..sample.0.num_faces()).collect())
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, FaceIndex>("f", vec![0, 1])
+            .insert_attrib_data::<usize, FaceIndex>("f", vec![0, 1])
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, FaceIndex>("f", vec![2])
+            .insert_attrib_data::<usize, FaceIndex>("f", vec![2])
             .unwrap();
     }
 
-    pub(crate) fn add_face_vertex_attrib_to_polymeshes(
+    pub(crate) fn insert_face_vertex_attrib_to_polymeshes(
         sample: &mut (PolyMesh, PolyMesh, PolyMesh),
     ) {
         sample
             .0
-            .add_attrib_data::<usize, FaceVertexIndex>(
+            .insert_attrib_data::<usize, FaceVertexIndex>(
                 "fv",
                 (0..sample.0.num_face_vertices()).collect(),
             )
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, FaceVertexIndex>("fv", vec![0, 1, 2, 3, 4, 5])
+            .insert_attrib_data::<usize, FaceVertexIndex>("fv", vec![0, 1, 2, 3, 4, 5])
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, FaceVertexIndex>("fv", vec![6, 7, 8, 9])
+            .insert_attrib_data::<usize, FaceVertexIndex>("fv", vec![6, 7, 8, 9])
             .unwrap();
     }
 
-    pub(crate) fn add_face_edge_attrib_to_polymeshes(sample: &mut (PolyMesh, PolyMesh, PolyMesh)) {
+    pub(crate) fn insert_face_edge_attrib_to_polymeshes(
+        sample: &mut (PolyMesh, PolyMesh, PolyMesh),
+    ) {
         sample
             .0
-            .add_attrib_data::<usize, FaceEdgeIndex>("fe", (0..sample.0.num_face_edges()).collect())
+            .insert_attrib_data::<usize, FaceEdgeIndex>(
+                "fe",
+                (0..sample.0.num_face_edges()).collect(),
+            )
             .unwrap();
         sample
             .1
-            .add_attrib_data::<usize, FaceEdgeIndex>("fe", vec![0, 1, 2, 3, 4, 5])
+            .insert_attrib_data::<usize, FaceEdgeIndex>("fe", vec![0, 1, 2, 3, 4, 5])
             .unwrap();
         sample
             .2
-            .add_attrib_data::<usize, FaceEdgeIndex>("fe", vec![6, 7, 8, 9])
+            .insert_attrib_data::<usize, FaceEdgeIndex>("fe", vec![6, 7, 8, 9])
             .unwrap();
     }
 
-    pub(crate) fn add_attribs_to_polymeshes(sample: &mut (PolyMesh, PolyMesh, PolyMesh)) {
-        add_vertex_attrib_to_polymeshes(sample);
-        add_face_attrib_to_polymeshes(sample);
-        add_face_vertex_attrib_to_polymeshes(sample);
-        add_face_edge_attrib_to_polymeshes(sample);
+    pub(crate) fn insert_attribs_to_polymeshes(sample: &mut (PolyMesh, PolyMesh, PolyMesh)) {
+        insert_vertex_attrib_to_polymeshes(sample);
+        insert_face_attrib_to_polymeshes(sample);
+        insert_face_vertex_attrib_to_polymeshes(sample);
+        insert_face_edge_attrib_to_polymeshes(sample);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::SplitIntoConnectedComponents;
-    use crate::mesh::{attrib::*, topology::*};
+    use crate::{attrib::*, mesh::topology::*};
     type TriMesh = crate::mesh::TriMesh<f64>;
 
     // Verify that merging works for two meshes even in different orders.
@@ -152,18 +158,18 @@ mod tests {
         let mut mesh = TriMesh::new(verts, indices);
 
         // This also serves as the source index.
-        mesh.add_attrib_data::<usize, VertexIndex>("v", (0..mesh.num_vertices()).collect())
+        mesh.insert_attrib_data::<usize, VertexIndex>("v", (0..mesh.num_vertices()).collect())
             .unwrap();
 
-        mesh.add_attrib_data::<usize, FaceIndex>("f", (0..mesh.num_faces()).collect())
+        mesh.insert_attrib_data::<usize, FaceIndex>("f", (0..mesh.num_faces()).collect())
             .unwrap();
 
-        mesh.add_attrib_data::<usize, FaceVertexIndex>(
+        mesh.insert_attrib_data::<usize, FaceVertexIndex>(
             "fv",
             (0..mesh.num_face_vertices()).collect(),
         )
         .unwrap();
-        mesh.add_attrib_data::<usize, FaceEdgeIndex>("fe", (0..mesh.num_face_edges()).collect())
+        mesh.insert_attrib_data::<usize, FaceEdgeIndex>("fe", (0..mesh.num_face_edges()).collect())
             .unwrap();
 
         let parts = mesh.clone().split_into_connected_components();

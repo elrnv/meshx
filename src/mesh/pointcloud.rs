@@ -4,7 +4,7 @@
 //! attributes.
 //!
 
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::{VertexMesh, VertexPositions};
 use crate::Real;

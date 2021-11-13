@@ -101,8 +101,12 @@ where
         &mut self,
     ) -> (&mut AttribDict<I>, Option<&mut AttribValueCache>);
 
-    /// Add an attribute at the appropriate location with a given default.
-    fn add_attrib<'a, T, I: AttribIndex<Self>>(
+    /// Insert an attribute at the appropriate location with a given default.
+    ///
+    /// In an attribute with the same name already exists, an error is returned.
+    /// If an existing attribute should be overwritten, use
+    /// [`Attrib::reset_attrib_to_default`] instead.
+    fn insert_attrib_with_default<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
         def: T,
@@ -118,8 +122,12 @@ where
     }
 
     /// Construct an attribute from a given data `Vec<T>`. `data` must have
-    /// exactly the right size for the attribute to be added successfully.
-    fn add_attrib_data<'a, T, I: AttribIndex<Self>>(
+    /// exactly the right size for the attribute to be inserted successfully.
+    ///
+    /// If an attribute with the same name already exists, an error is returned.
+    /// Use [`Attrib::set_attrib_data`] to overwrite the attribute in such a
+    /// case.
+    fn insert_attrib_data<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
         data: Vec<T>,
@@ -142,9 +150,9 @@ where
         }
     }
 
-    /// Sets the attribute to the specified default value whether or not it
+    /// Resets the attribute to the specified default value whether or not it
     /// already exists.
-    fn set_attrib<'a, T, I: AttribIndex<Self>>(
+    fn reset_attrib_to_default<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
         def: T,
@@ -162,12 +170,15 @@ where
         })
     }
 
-    /// Set an attribute to the given data slice. `data` must have exactly the
+    /// Set an attribute to the given data vector. `data` must have exactly the
     /// right size for the attribute to be set successfully.
+    ///
+    /// If an attribute with the same name already exists, it is overwritten. To
+    /// avoid overwriting existing attributes use [`Attrib::insert_attrib_from_vec`].
     fn set_attrib_data<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
-        data: &[T],
+        data: Vec<T>,
     ) -> Result<&mut Attribute<I>, Error>
     where
         T: AttributeValue + Default,
@@ -182,16 +193,16 @@ where
         } else {
             Ok(match self.attrib_dict_mut().entry(name.to_owned()) {
                 Entry::Occupied(mut entry) => {
-                    entry.insert(Attribute::direct_from_slice(data));
+                    entry.insert(Attribute::direct_from_vec(data));
                     entry.into_mut()
                 }
-                Entry::Vacant(entry) => entry.insert(Attribute::direct_from_slice(data)),
+                Entry::Vacant(entry) => entry.insert(Attribute::direct_from_vec(data)),
             })
         }
     }
 
-    /// Add an indirect attribute at the appropriate location with a given default.
-    fn add_indirect_attrib<'a, T, I: AttribIndex<Self>>(
+    /// Insert an indirect attribute at the appropriate location with a given default.
+    fn insert_indirect_attrib<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
         def: T,
@@ -240,8 +251,8 @@ where
     }
 
     /// Construct an indirect attribute from a given `IndirectData`. `data` must have
-    /// exactly the right size for the attribute to be added successfully.
-    fn add_indirect_attrib_data<'a, I: AttribIndex<Self>>(
+    /// exactly the right size for the attribute to be inserted successfully.
+    fn insert_indirect_attrib_data<'a, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
         data: IndirectData,
@@ -350,10 +361,10 @@ where
         }
     }
 
-    /// Retrieve the attribute with the given name and if it doesn't exist, add a new one and set
+    /// Retrieve the attribute with the given name and if it doesn't exist, insert a new one and set
     /// it to a given default value. In either case the mutable reference to the attribute is
     /// returned.
-    fn attrib_or_add<'a, T, I: AttribIndex<Self>>(
+    fn attrib_or_insert_with_default<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
         def: T,
@@ -371,7 +382,7 @@ where
     /// Retrieve the attribute with the given name and if it doesn't exist, set its data to
     /// what's in the given slice. In either case the mutable reference to the attribute is
     /// returned.
-    fn attrib_or_add_data<'a, T, I: AttribIndex<Self>>(
+    fn attrib_or_insert_data<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
         data: &[T],
@@ -394,10 +405,10 @@ where
         }
     }
 
-    /// Retrieve the indirect attribute with the given name and if it doesn't exist, add a new one
+    /// Retrieve the indirect attribute with the given name and if it doesn't exist, insert a new one
     /// and set it to a given default value. In either case the mutable reference to the attribute
     /// is returned.
-    fn attrib_or_add_indirect<'a, T, I: AttribIndex<Self>>(
+    fn attrib_or_insert_indirect<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
         def: T,
@@ -431,7 +442,7 @@ where
 
     /// Get the attribute mutable iterator for a direct attribute.
     ///
-    /// This is essentially an alias for `attrib_mut(name).unwrap().direct_iter_mut::<T>()`.
+    /// This is an alias for `attrib_mut::<I>(name)?.direct_iter_mut::<T>()`.
     fn attrib_iter_mut<'a, 'b, T, I: 'b + AttribIndex<Self>>(
         &'b mut self,
         name: &'a str,
@@ -443,6 +454,8 @@ where
     }
 
     /// Get the iterator for an attribute no matter what kind.
+    ///
+    /// This is an alias for `attrib::<I>(name)?.iter::<T>()`.
     fn attrib_iter<'b, T, I: 'b + AttribIndex<Self>>(
         &'b self,
         name: &str,
@@ -488,6 +501,8 @@ where
 
     /// Determine if the given attribute is valid and exists at the given
     /// location.
+    ///
+    /// This is an alias for `attrib::<I>(name)?.iter::<T>()`.
     fn attrib_check<'a, T: Any, I: AttribIndex<Self>>(
         &self,
         name: &'a str,
@@ -496,6 +511,8 @@ where
     }
 
     /// Expose the underlying direct attribute as a slice.
+    ///
+    /// This is an alias for `attrib::<I>(name)?.as_slice::<T>()`.
     fn attrib_as_slice<'a, 'b, T: 'static, I: 'b + AttribIndex<Self>>(
         &'b self,
         name: &'a str,
@@ -504,6 +521,8 @@ where
     }
 
     /// Expose the underlying direct attribute as a mutable slice.
+    ///
+    /// This is an alias for `attrib_mut::<I>(name)?.as_mut_slice::<T>()`.
     fn attrib_as_mut_slice<'a, 'b, T: 'static, I: 'b + AttribIndex<Self>>(
         &'b mut self,
         name: &'a str,
@@ -526,6 +545,8 @@ where
     }
 
     /// Clone direct attribute data into a `Vec<T>`.
+    ///
+    /// This is an alias for `attrib_mut::<I>(name)?.as_mut_slice::<T>()`.
     fn direct_attrib_clone_into_vec<'a, 'b, T, I: 'b + AttribIndex<Self>>(
         &'b self,
         name: &'a str,
@@ -536,8 +557,9 @@ where
         self.attrib::<I>(name)?.direct_clone_into_vec()
     }
 
-    /// Borrow the raw attribute from the attribute dictionary. From there you can
-    /// use methods defined on the attribute itself.
+    /// Borrow the raw attribute from the attribute dictionary.
+    ///
+    /// From there you can use methods defined on the attribute itself.
     fn attrib<'a, I: AttribIndex<Self>>(&self, name: &'a str) -> Result<&Attribute<I>, Error> {
         match self.attrib_dict().get(name) {
             Some(attrib) => Ok(attrib),
@@ -545,8 +567,9 @@ where
         }
     }
 
-    /// Get the raw mutable attribute from the attribute dictionary. From there
-    /// you can use methods defined on the attribute itself.
+    /// Get the raw mutable attribute from the attribute dictionary.
+    ///
+    /// From there you can use methods defined on the attribute itself.
     fn attrib_mut<'a, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
@@ -646,7 +669,7 @@ impl<T: crate::Real> AttribPromote<FaceVertexIndex, VertexIndex> for crate::mesh
 /// Error type specific to retrieving attributes from the attribute dictionary.
 #[derive(Debug, PartialEq)]
 pub enum Error {
-    /// Attribute being added already exists.
+    /// Attribute being inserted already exists.
     AlreadyExists(String),
     /// Attribute exists but the specified type is inaccurate.
     TypeMismatch {
@@ -771,7 +794,7 @@ mod tests {
 
         {
             let nml_attrib = trimesh
-                .add_attrib::<_, VertexIndex>("N", Vector3::<f64>::zero())
+                .insert_attrib_with_default::<_, VertexIndex>("N", Vector3::<f64>::zero())
                 .unwrap();
             assert_eq!(
                 nml_attrib.get::<Vector3<f64>, _>(VertexIndex::from(1)),
@@ -822,7 +845,7 @@ mod tests {
 
         // Attrib doesn't exist yet
         for nml in trimesh
-            .set_attrib::<_, VertexIndex>("N", Vector3::<f64>::zero())
+            .reset_attrib_to_default::<_, VertexIndex>("N", Vector3::<f64>::zero())
             .unwrap()
             .iter::<Vector3<f64>>()
             .unwrap()
@@ -831,7 +854,7 @@ mod tests {
         }
         // Attrib already exist, we expect it to be overwritten
         for nml in trimesh
-            .set_attrib::<_, VertexIndex>("N", Vector3::from([1.0f64; 3]))
+            .reset_attrib_to_default::<_, VertexIndex>("N", Vector3::from([1.0f64; 3]))
             .unwrap()
             .iter::<Vector3<f64>>()
             .unwrap()
@@ -842,7 +865,7 @@ mod tests {
         // Attrib already exist, we expect it to be overwritten
         let verts = trimesh.vertex_positions().to_vec();
         trimesh
-            .set_attrib_data::<_, VertexIndex>("N", verts.as_slice())
+            .set_attrib_data::<_, VertexIndex>("N", verts)
             .unwrap();
         for (nml, p) in trimesh
             .attrib_iter::<[f64; 3], VertexIndex>("N")
@@ -855,7 +878,7 @@ mod tests {
         // Attrib doesn't exist yet
         let verts = trimesh.vertex_positions().to_vec();
         trimesh
-            .set_attrib_data::<_, VertexIndex>("ref", verts.as_slice())
+            .set_attrib_data::<_, VertexIndex>("ref", verts)
             .unwrap();
         for (r, p) in trimesh
             .attrib_iter::<[f64; 3], VertexIndex>("ref")
@@ -866,9 +889,9 @@ mod tests {
         }
     }
 
-    /// Test attrib_or_add* methods.
+    /// Test attrib_or_insert* methods.
     #[test]
-    fn attrib_or_add_test() -> Result<(), Error> {
+    fn attrib_or_insert_test() -> Result<(), Error> {
         let pts = vec![
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
@@ -881,7 +904,7 @@ mod tests {
 
         // Attrib doesn't exist yet
         for nml in trimesh
-            .attrib_or_add::<_, VertexIndex>("N", [0.0f64; 3])?
+            .attrib_or_insert_with_default::<_, VertexIndex>("N", [0.0f64; 3])?
             .iter::<[f64; 3]>()?
         {
             assert_eq!(*nml, [0.0; 3]);
@@ -889,7 +912,7 @@ mod tests {
 
         // Attrib already exists, we expect it to be left intact
         for nml in trimesh
-            .attrib_or_add::<_, VertexIndex>("N", [1.0f64; 3])?
+            .attrib_or_insert_with_default::<_, VertexIndex>("N", [1.0f64; 3])?
             .iter::<[f64; 3]>()?
         {
             assert_eq!(*nml, [0.0; 3]);
@@ -898,7 +921,7 @@ mod tests {
         // Attrib already exists, we expect it to be left intact
         let verts: Vec<_> = trimesh.vertex_positions().to_vec();
         for nml in trimesh
-            .attrib_or_add_data::<_, VertexIndex>("N", verts.as_slice())?
+            .attrib_or_insert_data::<_, VertexIndex>("N", verts.as_slice())?
             .iter::<[f64; 3]>()?
         {
             assert_eq!(*nml, [0.0; 3]);
@@ -906,7 +929,7 @@ mod tests {
 
         // Attrib doesn't yet exist
         let verts = trimesh.vertex_positions().to_vec();
-        trimesh.attrib_or_add_data::<_, VertexIndex>("ref", verts.as_slice())?;
+        trimesh.attrib_or_insert_data::<_, VertexIndex>("ref", verts.as_slice())?;
         for (r, p) in trimesh
             .attrib_iter::<[f64; 3], VertexIndex>("ref")?
             .zip(trimesh.vertex_positions())
@@ -935,7 +958,7 @@ mod tests {
         let data = vec![[0i8, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]];
         {
             let attrib = trimesh
-                .add_attrib_data::<_, VertexIndex>("attrib1", data.clone())
+                .insert_attrib_data::<_, VertexIndex>("attrib1", data.clone())
                 .unwrap();
             for i in 0..data.len() {
                 assert_eq!(attrib.get::<[i8; 3], _>(VertexIndex::from(i)), Ok(data[i]));
@@ -977,7 +1000,7 @@ mod tests {
         let data = vec![[0i8, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]];
         {
             trimesh
-                .add_attrib_data::<_, VertexIndex>("attrib1", data.clone())
+                .insert_attrib_data::<_, VertexIndex>("attrib1", data.clone())
                 .unwrap();
         }
 
@@ -1022,7 +1045,7 @@ mod tests {
         let data = vec![[0i8, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11]];
         {
             trimesh
-                .add_attrib_data::<_, FaceVertexIndex>("attrib1", data.clone())
+                .insert_attrib_data::<_, FaceVertexIndex>("attrib1", data.clone())
                 .unwrap();
         }
 

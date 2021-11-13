@@ -11,6 +11,8 @@ pub mod interval;
 pub mod ops;
 pub mod prim;
 
+pub mod attrib;
+
 pub mod algo;
 pub mod mesh;
 

@@ -5,7 +5,7 @@
 //! cells of arbitrary shape.
 //!
 
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::VertexPositions;
 use crate::Real;

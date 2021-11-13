@@ -11,10 +11,11 @@ mod surface;
 pub use extended::*;
 pub use surface::*;
 
-use crate::mesh::attrib::*;
+use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::*;
 use crate::prim::Tetrahedron;
+use crate::utils::slice::*;
 use crate::Real;
 use math::Matrix3;
 use std::slice::{Iter, IterMut};
@@ -226,6 +227,70 @@ impl<T: Real> TetMesh<T> {
                 vals.swap(2, 3);
             }
         }
+    }
+
+    /// Sort vertices by the given key values, and return the reulting order (permutation).
+    ///
+    /// This function assumes we have at least one vertex.
+    // TODO: This function is identical to the one used in uniform_poly_mesh.
+    // We need to figure out how to remove this code duplication whether it is through traits or otherwise.
+    pub fn sort_vertices_by_key<K, F>(&mut self, mut f: F) -> Vec<usize>
+    where
+        F: FnMut(usize) -> K,
+        K: Ord,
+    {
+        // Early exit.
+        if self.num_vertices() == 0 {
+            return Vec::new();
+        }
+
+        let num = self.attrib_size::<VertexIndex>();
+        debug_assert!(num > 0);
+
+        // Original vertex indices.
+        let mut order: Vec<usize> = (0..num).collect();
+
+        // Sort vertex indices by the given key.
+        order.sort_by_key(|k| f(*k));
+
+        // Now sort all mesh data according to the sorting given by order.
+
+        let TetMesh {
+            ref mut vertex_positions,
+            ref mut indices,
+            ref mut vertex_attributes,
+            .. // cell and cell_{vertex,face} attributes are unchanged
+        } = *self;
+
+        let mut seen = vec![false; vertex_positions.len()];
+
+        // Apply the order permutation to vertex_positions in place
+        apply_permutation_with_seen(&order, vertex_positions.as_mut_slice(), &mut seen);
+
+        // Apply permutation to each vertex attribute
+        for (_, attrib) in vertex_attributes.iter_mut() {
+            let mut data_slice = attrib.data_mut_slice();
+
+            // Clear seen
+            seen.iter_mut().for_each(|b| *b = false);
+
+            apply_permutation_with_seen(&order, &mut data_slice, &mut seen);
+        }
+
+        // Build a reverse mapping for convenience.
+        let mut new_indices = vec![0; order.len()];
+        for (new_idx, &old_idx) in order.iter().enumerate() {
+            new_indices[old_idx] = new_idx;
+        }
+
+        // Remap cell vertices.
+        for cell in indices.iter_mut() {
+            for vtx_idx in cell.iter_mut() {
+                *vtx_idx = new_indices[*vtx_idx];
+            }
+        }
+
+        order
     }
 }
 

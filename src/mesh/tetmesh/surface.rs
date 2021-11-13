@@ -1,5 +1,5 @@
+use crate::attrib::*;
 use crate::index::{CheckedIndex, Index};
-use crate::mesh::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::*;
 use crate::Real;
@@ -324,25 +324,25 @@ impl<T: Real> TetMesh<T> {
         // Add the mapping to the original tetmesh. Overwrite any existing attributes.
         if let Some(name) = original_vertex_index_name {
             trimesh
-                .set_attrib_data::<_, VertexIndex>(name, &original_vertex_index)
+                .set_attrib_data::<_, VertexIndex>(name, original_vertex_index)
                 .expect("Failed to add original vertex index attribute.");
         }
 
         if let Some(name) = original_tet_index_name {
             trimesh
-                .set_attrib_data::<_, FaceIndex>(name, &tet_indices)
+                .set_attrib_data::<_, FaceIndex>(name, tet_indices)
                 .expect("Failed to add original tet index attribute.");
         }
 
         if let Some(name) = original_tet_vertex_index_name {
             trimesh
-                .set_attrib_data::<_, FaceVertexIndex>(name, &tet_vertex_index)
+                .set_attrib_data::<_, FaceVertexIndex>(name, tet_vertex_index)
                 .expect("Failed to add original tet vertex index attribute.");
         }
 
         if let Some(name) = original_tet_face_index_name {
             trimesh
-                .set_attrib_data::<_, FaceIndex>(name, &tet_face_indices)
+                .set_attrib_data::<_, FaceIndex>(name, tet_face_indices)
                 .expect("Failed to add original tet face index attribute.");
         }
 
@@ -515,15 +515,15 @@ mod tests {
         let mut mesh = TetMesh::new(points, indices);
 
         let vtx_data = (0i32..mesh.num_vertices() as i32).collect();
-        mesh.add_attrib_data::<_, VertexIndex>("vtx_attrib", vtx_data)
+        mesh.insert_attrib_data::<_, VertexIndex>("vtx_attrib", vtx_data)
             .unwrap();
 
         let cell_data = (0u64..mesh.num_cells() as u64).collect();
-        mesh.add_attrib_data::<_, CellIndex>("cell_attrib", cell_data)
+        mesh.insert_attrib_data::<_, CellIndex>("cell_attrib", cell_data)
             .unwrap();
 
         let cell_vtx_data = (0usize..mesh.num_cell_vertices() as usize).collect();
-        mesh.add_attrib_data::<_, CellVertexIndex>("cell_vtx_attrib", cell_vtx_data)
+        mesh.insert_attrib_data::<_, CellVertexIndex>("cell_vtx_attrib", cell_vtx_data)
             .unwrap();
 
         let trimesh = mesh.surface_trimesh_with_mapping_and_filter(
