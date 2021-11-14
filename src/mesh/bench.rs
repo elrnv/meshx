@@ -56,7 +56,7 @@ mod bench {
 
         let mut trimesh = TriMesh::new(pts.clone(), Vec::new());
 
-        trimesh.add_attrib_data::<_, VertexIndex>("P", pts).ok();
+        trimesh.insert_attrib_data::<_, VertexIndex>("P", pts).ok();
 
         trimesh
     }
