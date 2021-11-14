@@ -303,12 +303,22 @@ impl<T: Real> Mesh<T> {
         }
     }
 
+    /// Returns an iterator over immutable index slices for each cell in this mesh.
     pub fn cell_iter(&self) -> impl ExactSizeIterator<Item = &[usize]> {
         self.indices.iter()
     }
 
+    /// Returns an iterator over mutable index slices for each cell in this mesh.
     pub fn cell_iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut [usize]> {
         self.indices.iter_mut()
+    }
+
+    /// Returns an iterator over cell types for each individual cell of this mesh.
+    pub fn cell_type_iter(&self) -> impl Iterator<Item = CellType> + '_ {
+        self.types
+            .iter()
+            .zip(self.indices.chunks.chunk_offsets.sizes())
+            .flat_map(|(&ty, n)| std::iter::repeat(ty).take(n))
     }
 
     /// Reverse the order of each cell in this mesh.
