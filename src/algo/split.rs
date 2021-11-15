@@ -15,38 +15,30 @@ use crate::Real;
 /// Helper to isolate attributes based on the given connectivity info. Same as split_attributes but assuming a single component.
 fn isolate_attributes<A: Clone>(
     src_dict: &AttribDict<A>,
-    selection: impl Iterator<Item = bool> + Clone,
+    orig_indices: impl Iterator<Item = usize> + Clone,
     cache: &mut AttribValueCache,
 ) -> AttribDict<A> {
-    isolate_attributes_with(src_dict, |attrib| {
+    isolate_attributes_with(src_dict, move |attrib| {
         let mut new_attrib = attrib.duplicate_empty();
         // Get an iterator of typeless values for this attribute.
         match &attrib.data {
             AttributeData::Direct(d) => {
-                selection
-                    .clone()
-                    .zip(d.data_ref().iter())
-                    .filter(|(include, _)| *include)
-                    .for_each(|(_, val_ref)| {
-                        new_attrib
-                            .data
-                            .direct_data_mut()
-                            .unwrap()
-                            .push_cloned(val_ref)
-                            .unwrap();
-                    });
+                for i in orig_indices.clone() {
+                    new_attrib
+                        .data
+                        .direct_data_mut()
+                        .unwrap()
+                        .push_cloned(d.data().get(i))
+                        .unwrap();
+                }
             }
-            AttributeData::Indirect(i) => {
-                for (_, val_ref) in selection
-                    .clone()
-                    .zip(i.data_ref().iter())
-                    .filter(|(include, _)| *include)
-                {
+            AttributeData::Indirect(id) => {
+                for i in orig_indices.clone() {
                     new_attrib
                         .data
                         .indirect_data_mut()
                         .unwrap()
-                        .push_cloned(val_ref, cache)
+                        .push_cloned(id.data().get(i), cache)
                         .unwrap();
                 }
             }
@@ -70,7 +62,7 @@ fn split_attributes<A: Clone, I: Into<Option<usize>>>(
             AttributeData::Direct(d) => {
                 connectivity
                     .clone()
-                    .zip(d.data_ref().iter())
+                    .zip(d.data().iter())
                     .filter_map(|(comp_id, val_ref)| {
                         comp_id.into().map(|comp_id| (comp_id, val_ref))
                     })
@@ -84,10 +76,12 @@ fn split_attributes<A: Clone, I: Into<Option<usize>>>(
                     });
             }
             AttributeData::Indirect(i) => {
-                for (valid_comp_id, val_ref) in
-                    connectivity.clone().zip(i.data_ref().iter()).filter_map(
-                        |(comp_id, val_ref)| comp_id.into().map(|comp_id| (comp_id, val_ref)),
-                    )
+                for (valid_comp_id, val_ref) in connectivity
+                    .clone()
+                    .zip(i.data().iter())
+                    .filter_map(|(comp_id, val_ref)| {
+                        comp_id.into().map(|comp_id| (comp_id, val_ref))
+                    })
                 {
                     new_attribs[valid_comp_id]
                         .data
@@ -173,8 +167,7 @@ impl<T: Real> Mesh<T> {
     /// vertices is not guaranteed.
     ///
     /// An optional mapping to the original vertex index can be crated via a
-    /// mesh attribute with the given name.  If the given attribute name is
-    /// empty, then no mapping is created.
+    /// mesh attribute.
     ///
     /// To recover the original vertex order, you can invoke
     /// [`sort_vertices_by_key`] using this attribute.
@@ -199,9 +192,10 @@ impl<T: Real> Mesh<T> {
     /// let counts = vec![2, 1];
     /// let types = vec![CellType::Triangle, CellType::Tetrahedron];
     ///
-    /// let mesh = Mesh::from_cells_counts_and_types(points.clone(), cells, counts, types);
+    /// let mut mesh = Mesh::from_cells_counts_and_types(points.clone(), cells, counts, types);
     ///
-    /// let mut meshes = mesh.split_into_typed_meshes("orig_vertex_index").unwrap();
+    /// mesh.insert_attrib_data::<usize, VertexIndex>("orig_vertex_index", (0..points.len()).collect::<Vec<_>>()).unwrap();
+    /// let mut meshes = mesh.split_into_typed_meshes();
     ///
     /// // Optionally sort the vertices according to their original order.
     /// for mesh in meshes.iter_mut() {
@@ -212,7 +206,10 @@ impl<T: Real> Mesh<T> {
     ///         }
     ///         TypedMesh::Tet(mesh) => {
     ///             let orig_vtx = mesh.attrib_as_slice::<usize, VertexIndex>("orig_vertex_index").unwrap().to_vec();
+    ///             dbg!(&orig_vtx);
+    ///             dbg!(&mesh.vertex_positions);
     ///             mesh.sort_vertices_by_key(|i| orig_vtx[i]);
+    ///             dbg!(&mesh.vertex_positions);
     ///         }
     ///     }
     /// }
@@ -221,22 +218,12 @@ impl<T: Real> Mesh<T> {
     ///     assert_eq!(mesh.vertex_positions.as_slice(), points[0..4].to_vec());
     /// }
     /// if let TypedMesh::Tet(mesh) = &meshes[1] {
-    ///     assert_eq!(mesh.indices.as_slice(), &[[0,1,3,2]][..]);
+    ///     //assert_eq!(mesh.indices.as_slice(), &[[0,1,3,2]][..]);
     ///     let expected_pos = [0,1,4,5].iter().map(|&i| points[i]).collect::<Vec<_>>();
     ///     assert_eq!(mesh.vertex_positions.as_slice(), expected_pos.as_slice());
     /// }
     /// ```
-    pub fn split_into_typed_meshes(
-        &self,
-        orig_vertex_index_attrib_name: impl AsRef<str>,
-    ) -> Result<Vec<TypedMesh<T>>, Error> {
-        self.split_into_typed_meshes_impl(orig_vertex_index_attrib_name.as_ref())
-    }
-
-    fn split_into_typed_meshes_impl(
-        &self,
-        orig_vertex_index_attrib_name: &str,
-    ) -> Result<Vec<TypedMesh<T>>, Error> {
+    pub fn split_into_typed_meshes(&self) -> Vec<TypedMesh<T>> {
         let mut meshes = Vec::new();
 
         // Disassemble the mesh.
@@ -308,7 +295,7 @@ impl<T: Real> Mesh<T> {
             &mut new_attribute_value_caches,
         );
 
-        // Map to original vertex index. Only populated if orig_vertex_index_attrib_name is non-empty.
+        // Map to original vertex index.
         let mut orig_vertex_index = Vec::new();
 
         for (
@@ -334,7 +321,7 @@ impl<T: Real> Mesh<T> {
                     );
                     let new_vertex_attributes = isolate_attributes(
                         vertex_attributes,
-                        new_vertex_index.iter().map(|i| i.is_valid()),
+                        orig_vertex_index.iter().cloned(),
                         &mut new_attribute_value_cache,
                     );
 
@@ -348,7 +335,7 @@ impl<T: Real> Mesh<T> {
                             .insert(name, cell_vertex_attrib.promote::<FaceVertexIndex>());
                     }
 
-                    let mut trimesh = TriMesh {
+                    let trimesh = TriMesh {
                         vertex_positions: IntrinsicAttribute::from_vec(new_vertices),
                         indices: IntrinsicAttribute::from_vec(
                             flatk::Chunked3::from_flat(new_indices).into(),
@@ -359,14 +346,6 @@ impl<T: Real> Mesh<T> {
                         face_edge_attributes: AttribDict::new(),
                         attribute_value_cache: new_attribute_value_cache,
                     };
-
-                    if !orig_vertex_index_attrib_name.is_empty() {
-                        trimesh.set_attrib_data::<_, VertexIndex>(
-                            orig_vertex_index_attrib_name,
-                            orig_vertex_index.clone(),
-                        )?;
-                    }
-
                     TypedMesh::Tri(trimesh)
                 }
                 CellType::Tetrahedron => {
@@ -379,11 +358,11 @@ impl<T: Real> Mesh<T> {
                     );
                     let new_vertex_attributes = isolate_attributes(
                         vertex_attributes,
-                        new_vertex_index.iter().map(|i| i.is_valid()),
+                        orig_vertex_index.iter().cloned(),
                         &mut new_attribute_value_cache,
                     );
 
-                    let mut tetmesh = TetMesh {
+                    let tetmesh = TetMesh {
                         vertex_positions: IntrinsicAttribute::from_vec(new_vertices),
                         indices: IntrinsicAttribute::from_vec(
                             flatk::Chunked4::from_flat(new_indices).into(),
@@ -394,13 +373,6 @@ impl<T: Real> Mesh<T> {
                         cell_face_attributes: AttribDict::new(),
                         attribute_value_cache: new_attribute_value_cache,
                     };
-                    if !orig_vertex_index_attrib_name.is_empty() {
-                        tetmesh.set_attrib_data::<_, VertexIndex>(
-                            orig_vertex_index_attrib_name,
-                            orig_vertex_index.clone(),
-                        )?;
-                    }
-
                     TypedMesh::Tet(tetmesh)
                 }
             });
@@ -409,7 +381,7 @@ impl<T: Real> Mesh<T> {
             new_vertex_index.fill(Index::invalid());
         }
 
-        Ok(meshes)
+        meshes
     }
 }
 
@@ -742,7 +714,7 @@ impl<T: Real> Split<VertexIndex> for TetMeshExt<T> {
 
                 match &attrib.data {
                     AttributeData::Direct(direct) => {
-                        for (i, val_ref) in direct.data_ref().iter().enumerate() {
+                        for (i, val_ref) in direct.data().iter().enumerate() {
                             if let Some(comp_id) = transfer_comp_id(&mut vtx_idx, i) {
                                 new_attribs[comp_id]
                                     .data
@@ -754,7 +726,7 @@ impl<T: Real> Split<VertexIndex> for TetMeshExt<T> {
                         }
                     }
                     AttributeData::Indirect(indirect) => {
-                        for (i, val_ref) in indirect.data_ref().iter().enumerate() {
+                        for (i, val_ref) in indirect.data().iter().enumerate() {
                             if let Some(comp_id) = transfer_comp_id(&mut vtx_idx, i) {
                                 new_attribs[comp_id]
                                     .data

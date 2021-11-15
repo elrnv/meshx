@@ -9,8 +9,10 @@ use crate::mesh::polymesh::PolyMesh;
 use crate::mesh::tetmesh::{TetMesh, TetMeshExt};
 use crate::mesh::topology::*;
 use crate::mesh::uniform_poly_mesh::{QuadMesh, QuadMeshExt, TriMesh, TriMeshExt};
+use crate::mesh::unstructured_mesh::Mesh;
 use crate::mesh::VertexPositions;
 use crate::Real;
+use flatk::*;
 use math::{Vector3, Vector4};
 
 /// A trait describing the action of merging mutltiple objects into a single object of the same
@@ -183,6 +185,171 @@ fn merge_attribute_dicts_with_source<I>(
         }
 
         assert_eq!(attrib.len(), num_elements);
+    }
+}
+
+impl<T: Real> Merge for Mesh<T> {
+    /// Attributes with the same name but different types won't be merged.
+    fn merge(&mut self, other: Self) -> &mut Self {
+        let self_num_vertices = self.num_vertices();
+        let other_num_vertices = other.num_vertices();
+        let self_num_cells = self.num_cells();
+        let other_num_cells = other.num_cells();
+        let self_num_cell_vertices = self.num_cell_vertices();
+        let other_num_cell_vertices = other.num_cell_vertices();
+
+        // Deconstruct the other mesh explicitly since it will not be valid as soon as we start to
+        // canibalize its contents.
+        let Mesh {
+            vertex_positions: mut other_vertex_positions,
+            indices: other_indices,
+            types: other_types,
+            vertex_attributes: other_vertex_attributes,
+            cell_attributes: other_cell_attributes,
+            cell_vertex_attributes: other_cell_vertex_attributes,
+            attribute_value_cache: other_attribute_value_cache,
+        } = other;
+
+        self.vertex_positions
+            .as_mut_vec()
+            .append(other_vertex_positions.as_mut_vec());
+        self.types.extend(other_types.iter());
+        self.indices
+            .data
+            .extend(other_indices.data.iter().map(|&i| i + self_num_vertices));
+        self.indices
+            .chunks
+            .offsets
+            .extend(other_indices.chunks.offsets.iter());
+        self.indices
+            .chunks
+            .chunk_offsets
+            .extend(other_indices.chunks.chunk_offsets.iter());
+
+        // Transfer attributes
+        merge_attribute_dicts(
+            &mut self.vertex_attributes,
+            self_num_vertices,
+            other_vertex_attributes,
+            other_num_vertices,
+        );
+        merge_attribute_dicts(
+            &mut self.cell_attributes,
+            self_num_cells,
+            other_cell_attributes,
+            other_num_cells,
+        );
+        merge_attribute_dicts(
+            &mut self.cell_vertex_attributes,
+            self_num_cell_vertices,
+            other_cell_vertex_attributes,
+            other_num_cell_vertices,
+        );
+
+        for value in other_attribute_value_cache.into_iter() {
+            self.attribute_value_cache.insert(value);
+        }
+        self
+    }
+}
+
+impl<T: Real> Mesh<T> {
+    /// Merge a iterator of meshes into a single distinct mesh.
+    ///
+    /// This version of `merge` accepts an attribute name for the source index on vertices.
+    ///
+    /// The mesh vertices will be merged in the order given by the source attribute. This
+    /// is useful when merging previously split up meshes. The source attribute needs to
+    /// have type `usize`.
+    ///
+    /// If the source attribute does not exist in at least one of the given meshes, then
+    /// `None` is returned and the merge is aborted.
+    ///
+    /// This is a non-destructive merge --- both original meshes remain intact.
+    /// This also means that this way of merging is somewhat more expensive than a merge
+    /// without any source indices.
+    pub fn merge_with_vertex_source<'a, I>(meshes: I, source_attrib: &str) -> Result<Self, Error>
+    where
+        I: IntoIterator<Item = &'a Self>,
+    {
+        Self::merge_with_vertex_source_impl(meshes.into_iter(), source_attrib)
+    }
+
+    fn merge_with_vertex_source_impl<'a>(
+        mesh_iter: impl Iterator<Item = &'a Self>,
+        source_attrib: &str,
+    ) -> Result<Self, Error> {
+        let mut vertex_positions = Vec::new();
+        let mut indices = Clumped::from_clumped_offsets(vec![0], vec![0], vec![]);
+        let mut types = Vec::new();
+        let mut vertex_attributes = AttribDict::new();
+        let mut cell_attributes = AttribDict::new();
+        let mut cell_vertex_attributes = AttribDict::new();
+        let mut attribute_value_cache = AttribValueCache::with_hasher(Default::default());
+        let mut num_vertices = 0;
+
+        for mesh in mesh_iter {
+            let src = mesh.attrib_as_slice::<usize, VertexIndex>(source_attrib)?;
+            if src.is_empty() {
+                // Empty mesh detected.
+                continue;
+            }
+
+            num_vertices = num_vertices.max(*src.iter().max().unwrap() + 1);
+
+            vertex_positions.resize(num_vertices, [T::zero(); 3]);
+            for (&i, &pos) in src.iter().zip(mesh.vertex_position_iter()) {
+                vertex_positions[i] = pos;
+            }
+
+            // Transfer attributes
+            merge_attribute_dicts_with_source(
+                &mut vertex_attributes,
+                num_vertices,
+                &mesh.vertex_attributes,
+                mesh.num_vertices(),
+                src,
+            );
+            merge_attribute_dicts(
+                &mut cell_attributes,
+                indices.len(),
+                mesh.cell_attributes.clone(),
+                mesh.num_cells(),
+            );
+            merge_attribute_dicts(
+                &mut cell_vertex_attributes,
+                indices.len(),
+                mesh.cell_vertex_attributes.clone(),
+                mesh.num_cell_vertices(),
+            );
+
+            for value in mesh.attribute_value_cache.iter() {
+                attribute_value_cache.insert(value.clone());
+            }
+
+            indices
+                .data
+                .extend(mesh.indices.data.iter().map(|&i| src[i]));
+            types.extend(mesh.types.iter());
+            indices
+                .chunks
+                .offsets
+                .extend(mesh.indices.chunks.offsets.iter());
+            indices
+                .chunks
+                .chunk_offsets
+                .extend(mesh.indices.chunks.chunk_offsets.iter());
+        }
+
+        Ok(Self {
+            vertex_positions: IntrinsicAttribute::from_vec(vertex_positions),
+            indices,
+            types,
+            vertex_attributes,
+            cell_attributes,
+            cell_vertex_attributes,
+            attribute_value_cache,
+        })
     }
 }
 
@@ -617,7 +784,7 @@ impl<T: Real> PolyMesh<T> {
             );
             merge_attribute_dicts(
                 &mut face_attributes,
-                indices.len(),
+                offsets.len() - 1,
                 mesh.face_attributes.clone(),
                 mesh.num_faces(),
             );
@@ -869,6 +1036,7 @@ impl_merge_for_uniform_mesh!(QuadMeshExt, QuadMesh, 4, Vector4);
 mod tests {
     use super::*;
     use crate::algo::test_utils::*;
+    use crate::mesh::Mesh;
     use crate::mesh::TetMeshExt;
 
     fn build_tetmesh_sample() -> (TetMeshExt<f64>, TetMeshExt<f64>, TetMeshExt<f64>) {
@@ -1092,6 +1260,32 @@ mod tests {
 
         let res = Merge::merge_slice(&[comp1, comp2]);
         assert_eq!(res, mesh);
+    }
+
+    #[test]
+    fn mesh_merge_collection() {
+        // Generate sample meshes
+        // TODO: Simplify this test (don't need so many conversions).
+        // TODO: include a test with merging trimeshes and tetmeshes.
+        let mut sample = build_tetmesh_sample();
+        insert_attribs_to_tetmeshes(&mut sample);
+        let (tetmesh_ext, comp1, comp2) = sample;
+
+        let res = Merge::merge_slice(&[
+            Mesh::from(TetMesh::from(comp1)),
+            Mesh::from(TetMesh::from(comp2)),
+        ]);
+        let exp = Mesh::from(TetMesh::from(tetmesh_ext));
+        assert_eq!(res.vertex_positions(), exp.vertex_positions());
+        assert_eq!(res.num_cells(), exp.num_cells());
+        // Cells must be the same, but the chunked structured may be different.
+        // TODO: implement compressing Meshes into a minimum number of contiguous blocks.
+        for (exp_cell, merged_cell) in exp.cell_iter().zip(res.cell_iter()) {
+            assert_eq!(exp_cell, merged_cell);
+        }
+        assert_eq!(exp.vertex_attributes, res.vertex_attributes);
+        assert_eq!(exp.cell_attributes, res.cell_attributes);
+        assert_eq!(exp.cell_vertex_attributes, res.cell_vertex_attributes);
     }
 
     #[test]

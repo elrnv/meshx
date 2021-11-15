@@ -140,7 +140,14 @@ macro_rules! impl_data_base {
 
         /// Get a reference to the internal value vector.
         #[inline]
+        #[deprecated(since = "0.2.1", note = "Please use data instead.")]
         pub fn data_ref(&self) -> &$vec_type {
+            &self.buf
+        }
+
+        /// Get a reference to the internal value vector.
+        #[inline]
+        pub fn data(&self) -> &$vec_type {
             &self.buf
         }
 
@@ -200,7 +207,9 @@ macro_rules! impl_data_base {
 /// This type doesn't store the location of the attribute.
 #[derive(Clone, Debug, PartialEq)]
 pub struct IndirectData {
+    /// Raw buffer of generic values.
     buf: HDataVec,
+    /// Default element.
     default_element: HValue,
 }
 
@@ -269,7 +278,7 @@ impl IndirectData {
     ) -> Self {
         IndirectData {
             buf: from_dyn![VecDyn<dyn HasAttributeValue as AttributeValueHashVTable>](dup_data(
-                self.data_ref().as_slice(),
+                self.data().as_slice(),
             )),
             default_element: self.default_element.clone(),
         }
@@ -291,7 +300,7 @@ impl IndirectData {
     ) -> Self {
         let mut attrib = self.duplicate_empty();
         attrib.extend_by(len);
-        init(attrib.data_mut().as_mut_slice(), self.data_ref().as_slice());
+        init(attrib.data_mut().as_mut_slice(), self.data().as_slice());
         attrib
     }
 
@@ -439,7 +448,9 @@ impl IndirectData {
 /// This type doesn't store the location of the attribute.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DirectData {
+    /// Raw buffer of generic values.
     buf: DataVec,
+    /// Default element.
     default_element: Value,
 }
 
@@ -503,7 +514,7 @@ impl DirectData {
     ) -> Self {
         DirectData {
             buf: from_dyn![VecDyn<dyn HasAttributeValue as AttributeValueVTable>](dup_data(
-                self.data_ref().as_slice(),
+                self.data().as_slice(),
             )),
             default_element: self.default_element.clone(),
         }
@@ -520,7 +531,7 @@ impl DirectData {
     ) -> Self {
         let mut attrib = self.duplicate_empty();
         attrib.extend_by(len);
-        init(attrib.data_mut().as_mut_slice(), self.data_ref().as_slice());
+        init(attrib.data_mut().as_mut_slice(), self.data().as_slice());
         attrib
     }
 
@@ -547,6 +558,12 @@ impl DirectData {
         self.buf
             .clone_into_vec()
             .ok_or_else(|| Error::type_mismatch_from_buf::<T, _>(&self.buf))
+    }
+
+    /// Set the value of a particular element.
+    pub fn set_value_at(&mut self, i: usize, new_value: ValueRef) -> Result<&mut Self, Error> {
+        self.buf.get_mut(i).clone_from_other(new_value)?;
+        Ok(self)
     }
 
     /// Push a value onto the underlying data buffer.
@@ -887,10 +904,7 @@ impl AttributeData {
     /// Get a reference to the internal data as a `DataSlice`.
     #[inline]
     pub fn data_slice(&self) -> DataSlice {
-        self.map_to(
-            |d| d.data_ref().as_slice(),
-            |i| i.data_ref().as_slice().upcast(),
-        )
+        self.map_to(|d| d.data().as_slice(), |i| i.data().as_slice().upcast())
     }
 
     /// Get a mutable reference to the internal data as a `DataSliceMut`.
@@ -1096,12 +1110,7 @@ impl<I> Attribute<I> {
     /// `self`, but corresponding to a different topology.
     pub fn promote<J>(&self) -> Attribute<J> {
         Attribute {
-            data: self.data.duplicate_with(|dst, src| {
-                // TODO: add an `extend` implementation to VecDyn
-                for elem in src.iter() {
-                    dst.push_cloned(elem);
-                }
-            }),
+            data: self.data.clone(),
             phantom: PhantomData,
         }
     }
