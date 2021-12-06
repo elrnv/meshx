@@ -56,8 +56,10 @@ pub struct TetMesh<T: Real> {
 }
 
 impl<T: Real> TetMesh<T> {
-    /// This constant defines the triangle faces of each tet. The rule is that `i`th face of the
-    /// tet is the one opposite to the `i`th vertex. The triangle starts with the smallest index.
+    /// Defines the triangle faces of each tet.
+    ///
+    /// The rule is that `i`th face of the tet is the one opposite to the `i`th
+    /// vertex. The triangle starts with the smallest index.
     pub const TET_FACES: [[usize; 3]; 4] = [[1, 3, 2], [0, 2, 3], [0, 3, 1], [0, 1, 2]];
 
     pub fn new(verts: Vec<[T; 3]>, indices: Vec<[usize; 4]>) -> TetMesh<T> {
@@ -230,8 +232,6 @@ impl<T: Real> TetMesh<T> {
     }
 
     /// Sort vertices by the given key values, and return the reulting order (permutation).
-    ///
-    /// This function assumes we have at least one vertex.
     // TODO: This function is identical to the one used in uniform_poly_mesh.
     // We need to figure out how to remove this code duplication whether it is through traits or otherwise.
     pub fn sort_vertices_by_key<K, F>(&mut self, mut f: F) -> Vec<usize>

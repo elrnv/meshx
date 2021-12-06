@@ -97,19 +97,21 @@ impl Ord for TetFace {
 }
 
 impl<T: Real> TetMesh<T> {
-    /// A helper function to compute surface topology of this `TetMesh`.
+    /// A helper function to compute surface topology of the tetmesh specified by the given cells.
     ///
     /// The algorithm is to iterate over every tet face and upon seeing a duplicate, remove it from
     /// the list. this will leave only unique faces, which correspond to the surface of the
     /// `TetMesh`.
     ///
     /// This function assumes that the given tetmesh is a manifold.
-    fn surface_triangle_set(&self) -> HashMap<SortedTri, TetFace> {
+    fn surface_triangle_set<'a>(
+        cells: impl std::iter::ExactSizeIterator<Item = &'a [usize; 4]>,
+    ) -> HashMap<SortedTri, TetFace> {
         let mut triangles: HashMap<SortedTri, TetFace> = {
             // This will make surfacing tetmeshes deterministic.
             let hash_builder =
                 hashbrown::hash_map::DefaultHashBuilder::with_seeds(7, 47, 2377, 719);
-            HashMap::with_capacity_and_hasher(self.num_cells() * 4, hash_builder)
+            HashMap::with_capacity_and_hasher(cells.len() * 4, hash_builder)
         };
 
         let add_tet_faces = |(i, cell): (usize, &[usize; 4])| {
@@ -128,21 +130,27 @@ impl<T: Real> TetMesh<T> {
             }
         };
 
-        self.cell_iter().enumerate().for_each(add_tet_faces);
+        cells.enumerate().for_each(add_tet_faces);
         triangles
     }
 
-    /// Extract the surface topology (triangles) of the `TetMesh`.
+    /// Extracts the surface topology (triangles) of the `TetMesh`.
+    ///
     /// This function assumes that the given tetmesh is a manifold.
     pub fn surface_topo(&self) -> Vec<[usize; 3]> {
-        let triangles = self.surface_triangle_set();
+        Self::surface_topo_from_tets(self.cell_iter())
+    }
 
-        let mut surface_topo = Vec::with_capacity(triangles.len());
-        for (_, elem) in triangles.into_iter() {
-            surface_topo.push(elem.tri);
-        }
-
-        surface_topo
+    /// Extracts the surface topology (triangles) from the given set of tetrahedral cells.
+    ///
+    /// This function assumes that the given tetrahedron topology is manifold.
+    pub fn surface_topo_from_tets<'a>(
+        cells: impl std::iter::ExactSizeIterator<Item = &'a [usize; 4]>,
+    ) -> Vec<[usize; 3]> {
+        Self::surface_triangle_set(cells)
+            .into_iter()
+            .map(|(_, elem)| elem.tri)
+            .collect()
     }
 
     /// Extract the surface triangle information of the `TetMesh`.
@@ -157,7 +165,7 @@ impl<T: Real> TetMesh<T> {
     where
         F: FnMut(&TetFace) -> bool,
     {
-        let triangles = self.surface_triangle_set();
+        let triangles = Self::surface_triangle_set(self.cell_iter());
 
         let mut surface_topo = Vec::with_capacity(triangles.len());
         let mut tet_indices = Vec::with_capacity(triangles.len());
