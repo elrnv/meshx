@@ -465,14 +465,14 @@ impl<T: Real> CellVertex for Mesh<T> {
     where
         CI: Copy + Into<CellIndex>,
     {
-        if which >= self.num_vertices_at_cell(cidx) {
+        let cidx = usize::from(cidx.into());
+        let num_verts_at_cell = self.indices.view().get(cidx)?.len();
+        if which >= num_verts_at_cell {
             None
         } else {
-            let cidx = usize::from(cidx.into());
-            debug_assert!(cidx < self.num_cells());
-
-            // SAFETY: cidx is known to be less than num_offsets - 1, we
-            // actually only need cidx to be less than num_offsets for safety.
+            // SAFETY: cidx is known to be less than num_offsets - 1 from the
+            // `num_verts_at_cell` computation.
+            // We actually only need cidx to be less than num_offsets for safety.
             Some((unsafe { self.indices.chunks.offset_value_unchecked(cidx) } + which).into())
         }
     }
