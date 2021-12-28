@@ -179,6 +179,169 @@ pub enum TypedMesh<T: Real> {
 }
 
 impl<T: Real> Mesh<T> {
+    /// Split the mesh by the given cell partition.
+    ///
+    /// Returns a vector of meshes and the mapping from new *vertex* indices to old *vertex*
+    /// indices, since some may have been duplicated.
+    /// The cells remain in the same order as in the original mesh.
+    ///
+    /// # Examples
+    /// ```
+    /// use meshx::mesh::{Mesh, CellType};
+    /// use flatk::Storage;
+    ///
+    /// let points = vec![
+    ///     [0.0, 0.0, 0.0],
+    ///     [1.0, 0.0, 0.0],
+    ///     [0.0, 1.0, 0.0],
+    ///     [1.0, 1.0, 0.0],
+    ///     [0.0, 0.0, 1.0],
+    ///     [1.0, 0.0, 1.0]];
+    /// let cells = vec![3, 0, 1, 2, // first triangle
+    ///                  3, 1, 3, 2, // second triangle
+    ///                  4, 0, 1, 5, 4]; // tetrahedron
+    ///
+    /// let mut mesh = Mesh::from_cells_with_type(points, cells, |i| if i < 2 { CellType::Triangle } else { CellType::Tetrahedron });
+    /// let parts = mesh.split_by_cell_partition(&[0,1,1], 2).0;
+    /// assert_eq!(parts[0].indices.storage().as_slice(), &[0,1,2][..]);
+    /// assert_eq!(parts[1].indices.storage().as_slice(), &[0,1,2,3,0,4,5][..]);
+    ///
+    /// ```
+    pub fn split_by_cell_partition(
+        self,
+        cell_partition: impl AsRef<[usize]>,
+        num_parts: usize,
+    ) -> (Vec<Self>, Vec<Vec<usize>>) {
+        self.split_by_cell_partition_impl(cell_partition.as_ref(), num_parts)
+    }
+
+    fn split_by_cell_partition_impl(
+        self,
+        cell_partition: &[usize],
+        num_parts: usize,
+    ) -> (Vec<Self>, Vec<Vec<usize>>) {
+        use flatk::zip;
+
+        let num_verts = self.num_vertices();
+
+        // Fast path, when everything is connected.
+        if num_parts == 1 {
+            return (vec![self], vec![(0..num_verts).collect::<Vec<_>>()]);
+        }
+
+        // Deconstruct the original mesh.
+        let Mesh {
+            vertex_positions,
+            indices,
+            types,
+            vertex_attributes,
+            cell_attributes,
+            cell_vertex_attributes,
+            ..
+        } = self;
+
+        let mut new_attribute_value_caches = vec![AttribValueCache::default(); num_parts];
+
+        // Split cell_attributes.
+        let new_cell_attributes = split_attributes(
+            &cell_attributes,
+            num_parts,
+            cell_partition.iter().cloned(),
+            &mut new_attribute_value_caches,
+        );
+
+        // Split cell_vertex_attributes.
+        let cell_vertex_partition_iter = cell_partition
+            .iter()
+            .flat_map(|&id| std::iter::repeat(id).take(4));
+        let new_cell_vertex_attributes = split_attributes(
+            &cell_vertex_attributes,
+            num_parts,
+            cell_vertex_partition_iter.clone(),
+            &mut new_attribute_value_caches,
+        );
+
+        let mut new_vertex_index = vec![vec![Index::invalid(); vertex_positions.len()]; num_parts];
+        let mut orig_vertex_index = vec![Vec::new(); num_parts];
+        let mut new_vertices = vec![Vec::new(); num_parts];
+        let mut new_indices = vec![Vec::new(); num_parts];
+        let mut new_offsets = vec![vec![0]; num_parts];
+        let mut new_types = vec![Vec::new(); num_parts];
+        let mut prev_cell_type = vec![None; num_parts];
+
+        let cell_type_iter = types
+            .iter()
+            .zip(indices.chunks.chunk_offsets.sizes())
+            .flat_map(|(&ty, n)| std::iter::repeat(ty).take(n));
+
+        for (&id, (cell, cell_type)) in cell_partition
+            .iter()
+            .zip(indices.iter().zip(cell_type_iter))
+        {
+            new_indices[id].extend(cell.iter().map(|&index| {
+                if let Some(new_index) = new_vertex_index[id][index].into_option() {
+                    new_index
+                } else {
+                    let new_index = new_vertices[id].len();
+                    new_vertex_index[id][index] = Index::new(new_index);
+                    new_vertices[id].push(vertex_positions[index]);
+                    orig_vertex_index[id].push(index);
+                    new_index
+                }
+            }));
+            if Some(cell_type) != prev_cell_type[id] {
+                prev_cell_type[id] = Some(cell_type);
+                let new_offset = *new_offsets[id].last().unwrap();
+                new_offsets[id].push(new_offset + 1);
+                new_types[id].push(cell_type);
+            } else {
+                *new_offsets[id].last_mut().unwrap() += 1;
+            }
+        }
+
+        let meshes = zip!(
+            orig_vertex_index.iter(),
+            new_vertices.into_iter(),
+            new_indices.into_iter(),
+            new_offsets.into_iter(),
+            new_types.into_iter(),
+            new_cell_attributes.into_iter(),
+            new_cell_vertex_attributes.into_iter(),
+            new_attribute_value_caches.into_iter()
+        )
+        .map(
+            |(
+                orig_vertex_indices,
+                new_vertex_positions,
+                new_indices,
+                new_offsets,
+                new_types,
+                new_cell_attributes,
+                new_cell_vertex_attributes,
+                mut new_attribute_value_cache,
+            )| {
+                let new_vertex_attributes = isolate_attributes(
+                    &vertex_attributes,
+                    orig_vertex_indices.iter().cloned(),
+                    &mut new_attribute_value_cache,
+                );
+                let mut mesh = Mesh::from_clumped_cells_and_types(
+                    new_vertex_positions,
+                    new_indices,
+                    new_offsets,
+                    new_types,
+                );
+                mesh.vertex_attributes = new_vertex_attributes;
+                mesh.cell_attributes = new_cell_attributes;
+                mesh.cell_vertex_attributes = new_cell_vertex_attributes;
+                mesh.attribute_value_cache = new_attribute_value_cache;
+                mesh
+            },
+        )
+        .collect::<Vec<_>>();
+
+        (meshes, orig_vertex_index)
+    }
     /// Splits this mesh into separate meshes, each holding a specific type of element.
     ///
     /// This function splits this mesh in a straightforward way by creating a
@@ -1995,5 +2158,39 @@ mod tests {
 
         mesh.attrib_promote::<[f32; 2], _>("uv", |a, b| assert_eq!(a, b))
             .unwrap();
+    }
+
+    #[test]
+    fn mesh_split_by_cell_partition() {
+        use flatk::Storage;
+
+        let points = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+        ];
+        let cells = vec![
+            3, 0, 1, 2, // first triangle
+            3, 1, 3, 2, // second triangle
+            3, 1, 3, 4, // third triangle
+            4, 0, 1, 5, 4,
+        ]; // tetrahedron
+
+        let mesh = Mesh::from_cells_with_type(points, cells, |i| {
+            if i < 2 {
+                CellType::Triangle
+            } else {
+                CellType::Tetrahedron
+            }
+        });
+        let parts = mesh.split_by_cell_partition(&[0, 1, 1, 1], 2).0;
+        assert_eq!(parts[0].indices.storage().as_slice(), &[0, 1, 2][..]);
+        assert_eq!(
+            parts[1].indices.storage().as_slice(),
+            &[0, 1, 2, 0, 1, 3, 4, 0, 5, 3][..]
+        );
     }
 }
