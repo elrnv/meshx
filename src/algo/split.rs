@@ -5,6 +5,7 @@
 use flatk::View;
 
 use super::connectivity::*;
+use super::partition::Partition;
 use crate::attrib::*;
 use crate::index::*;
 use crate::mesh::topology::*;
@@ -141,6 +142,29 @@ where
     Self: Sized,
 {
     fn split(self, partition: &[usize], num_parts: usize) -> Vec<Self>;
+    /// Split the mesh using a given attribute whose type implements `Hash` and `Eq`.
+    ///
+    /// It is a short-hand to calling `partition_by_attrib` followed by a `split`.
+    fn split_by_attrib<T: AttributeValueHash>(self, attrib: &str) -> Vec<Self>
+    where
+        Self: Attrib,
+        Src: AttribIndex<Self>,
+    {
+        let (partition, num_parts) = self.partition_by_attrib::<T, Src>(attrib);
+        self.split(partition.as_slice(), num_parts)
+    }
+    /// Split the mesh using a given attribute whose type implements `PartialOrd`.
+    ///
+    /// It is a short-hand to calling `partition_by_attrib_by_sort` followed by a `split`.
+    /// In contrast to `split_by_attrib_hash`, this function works for floating point types.
+    fn split_by_attrib_ord<T: PartialOrd + AttributeValue>(self, attrib: &str) -> Vec<Self>
+    where
+        Self: Attrib,
+        Src: AttribIndex<Self>,
+    {
+        let (partition, num_parts) = self.partition_by_attrib_by_sort::<T, Src>(attrib);
+        self.split(partition.as_slice(), num_parts)
+    }
 }
 
 // TODO: Refactor the implementations below by extracting common patterns. This can also be
@@ -402,7 +426,8 @@ impl<T: Real> Split<VertexIndex> for TetMesh<T> {
 impl<T: Real> TetMesh<T> {
     /// Split the mesh by the given cell partition.
     ///
-    /// Returns a vector of tetmeshes and the mapping from new *vertex* indices to old *vertex* indices, since some may have been duplicated.
+    /// Returns a vector of tetmeshes and the mapping from new *vertex* indices to old *vertex*
+    /// indices, since some may have been duplicated.
     /// The cells remain in the same order as in the original tetmesh.
     fn split_by_cell_partition(
         self,
@@ -415,10 +440,7 @@ impl<T: Real> TetMesh<T> {
 
         // Fast path, when everything is connected.
         if num_parts == 1 {
-            return (
-                vec![self],
-                vec![(0..num_verts).collect::<Vec<_>>()],
-            );
+            return (vec![self], vec![(0..num_verts).collect::<Vec<_>>()]);
         }
 
         // Deconstruct the original mesh.
@@ -527,16 +549,13 @@ impl<T: Real> TetMesh<T> {
         vertex_partition: &[usize],
         num_parts: usize,
     ) -> (Vec<Self>, Vec<Index>) {
-
         let num_cells = self.num_cells();
 
         // Fast path, when everything is connected.
         if num_parts == 1 {
             return (
                 vec![self],
-                (0..num_cells)
-                    .map(|x| Index::new(x))
-                    .collect::<Vec<_>>(),
+                (0..num_cells).map(|x| Index::new(x)).collect::<Vec<_>>(),
             );
         }
 
@@ -658,6 +677,12 @@ macro_rules! impl_split_for_uniform_mesh {
             #[inline]
             fn split(self, partition: &[usize], num_parts: usize) -> Vec<Self> {
                 self.split_by_vertex_partition(partition, num_parts).0
+            }
+        }
+        impl<T: Real> Split<FaceIndex> for $mesh_type<T> {
+            #[inline]
+            fn split(self, partition: &[usize], num_parts: usize) -> Vec<Self> {
+                self.split_by_face_partition(partition, num_parts).0
             }
         }
 
@@ -782,10 +807,11 @@ macro_rules! impl_split_for_uniform_mesh {
 
                 (meshes, orig_vertex_index)
             }
+
             /// Split the mesh by the given partition.
             ///
             /// Returns a vector of meshes and the mapping from old face index to new face index.
-            fn split_by_vertex_partition(
+            pub fn split_by_vertex_partition(
                 self,
                 vertex_partition: &[usize],
                 num_parts: usize,
@@ -1164,7 +1190,8 @@ impl<T: Real> SplitIntoConnectedComponents<VertexIndex, FaceIndex> for TriMesh<T
         let (vertex_connectivity, num_components) =
             Connectivity::<VertexIndex, FaceIndex>::connectivity(&self);
 
-        self.split(&vertex_connectivity, num_components)
+        self.split_by_vertex_partition(&vertex_connectivity, num_components)
+            .0
     }
 }
 
@@ -1174,7 +1201,8 @@ impl<T: Real> SplitIntoConnectedComponents<VertexIndex, FaceIndex> for QuadMesh<
         let (vertex_connectivity, num_components) =
             Connectivity::<VertexIndex, FaceIndex>::connectivity(&self);
 
-        self.split(&vertex_connectivity, num_components)
+        self.split_by_vertex_partition(&vertex_connectivity, num_components)
+            .0
     }
 }
 
@@ -1622,19 +1650,28 @@ mod tests {
         mesh.insert_attrib_data::<usize, VertexIndex>("v", (0..mesh.num_vertices()).collect())
             .unwrap();
 
-        mesh.insert_attrib_data::<usize, FaceIndex>(
-            "data",
-            vec![2,2,0,1,2,0],
-        )
+        mesh.insert_attrib_data::<usize, FaceIndex>("data", vec![2, 2, 0, 1, 2, 0])
             .unwrap();
 
         let (partition, num_parts) = mesh.partition_by_attrib::<usize, FaceIndex>("data");
 
-        let parts = mesh.split_by_face_partition(partition.as_slice(), num_parts).0;
+        let parts = mesh
+            .clone()
+            .split_by_face_partition(partition.as_slice(), num_parts)
+            .0;
+
         assert_eq!(parts.len(), 3);
-        assert_eq!(parts[0].indices.as_slice(), &[[0,1,2], [2,1,3], [0,1,4]][..]);
-        assert_eq!(parts[1].indices.as_slice(), &[[0,1,2], [3,1,0]][..]);
-        assert_eq!(parts[2].indices.as_slice(), &[[0,1,2]][..]);
+        assert_eq!(
+            parts[0].indices.as_slice(),
+            &[[0, 1, 2], [2, 1, 3], [0, 1, 4]][..]
+        );
+        assert_eq!(parts[1].indices.as_slice(), &[[0, 1, 2], [3, 1, 0]][..]);
+        assert_eq!(parts[2].indices.as_slice(), &[[0, 1, 2]][..]);
+
+        // Test the shorthand function.
+        let parts2 = Split::<FaceIndex>::split_by_attrib::<usize>(mesh, "data");
+
+        assert_eq!(parts, parts2);
     }
 
     #[test]
