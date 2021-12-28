@@ -385,6 +385,13 @@ impl<T: Real> Mesh<T> {
     }
 }
 
+impl<T: Real> Split<CellIndex> for TetMesh<T> {
+    #[inline]
+    fn split(self, partition: &[usize], num_parts: usize) -> Vec<Self> {
+        self.split_by_cell_partition(partition, num_parts).0
+    }
+}
+
 impl<T: Real> Split<VertexIndex> for TetMesh<T> {
     #[inline]
     fn split(self, partition: &[usize], num_parts: usize) -> Vec<Self> {
@@ -393,6 +400,125 @@ impl<T: Real> Split<VertexIndex> for TetMesh<T> {
 }
 
 impl<T: Real> TetMesh<T> {
+    /// Split the mesh by the given cell partition.
+    ///
+    /// Returns a vector of tetmeshes and the mapping from new *vertex* indices to old *vertex* indices, since some may have been duplicated.
+    /// The cells remain in the same order as in the original tetmesh.
+    fn split_by_cell_partition(
+        self,
+        cell_partition: &[usize],
+        num_parts: usize,
+    ) -> (Vec<Self>, Vec<Vec<usize>>) {
+        use flatk::zip;
+
+        let num_verts = self.num_vertices();
+
+        // Fast path, when everything is connected.
+        if num_parts == 1 {
+            return (
+                vec![self],
+                vec![(0..num_verts).collect::<Vec<_>>()],
+            );
+        }
+
+        // Deconstruct the original mesh.
+        let TetMesh {
+            vertex_positions,
+            indices,
+            vertex_attributes,
+            cell_attributes,
+            cell_vertex_attributes,
+            cell_face_attributes,
+            ..
+        } = self;
+
+        let mut new_attribute_value_caches = vec![AttribValueCache::default(); num_parts];
+
+        // Split cell_attributes.
+        let new_cell_attributes = split_attributes(
+            &cell_attributes,
+            num_parts,
+            cell_partition.iter().cloned(),
+            &mut new_attribute_value_caches,
+        );
+
+        // Split cell_vertex_attributes.
+        let cell_vertex_partition_iter = cell_partition
+            .iter()
+            .flat_map(|&id| std::iter::repeat(id).take(4));
+        let new_cell_vertex_attributes = split_attributes(
+            &cell_vertex_attributes,
+            num_parts,
+            cell_vertex_partition_iter.clone(),
+            &mut new_attribute_value_caches,
+        );
+
+        // Split cell_face_attributes.
+        let new_cell_face_attributes = split_attributes(
+            &cell_face_attributes,
+            num_parts,
+            cell_vertex_partition_iter,
+            &mut new_attribute_value_caches,
+        );
+
+        let mut new_vertex_index = vec![vec![Index::invalid(); vertex_positions.len()]; num_parts];
+        let mut orig_vertex_index = vec![Vec::new(); num_parts];
+        let mut new_vertices = vec![Vec::new(); num_parts];
+        let mut new_indices = vec![Vec::new(); num_parts];
+
+        for (&id, &cell) in cell_partition.iter().zip(indices.iter()) {
+            new_indices[id].push(cell.map(|index| {
+                if let Some(new_index) = new_vertex_index[id][index].into_option() {
+                    new_index
+                } else {
+                    let new_index = new_vertices[id].len();
+                    new_vertex_index[id][index] = Index::new(new_index);
+                    new_vertices[id].push(vertex_positions[index]);
+                    orig_vertex_index[id].push(index);
+                    new_index
+                }
+            }));
+        }
+        let meshes = zip!(
+            orig_vertex_index.iter(),
+            new_vertices.into_iter(),
+            new_indices.into_iter(),
+            new_cell_attributes.into_iter(),
+            new_cell_vertex_attributes.into_iter(),
+            new_cell_face_attributes.into_iter(),
+            new_attribute_value_caches.into_iter()
+        )
+        .map(
+            |(
+                orig_vertex_indices,
+                new_vertex_positions,
+                new_indices,
+                new_cell_attributes,
+                new_cell_vertex_attributes,
+                new_cell_face_attributes,
+                mut new_attribute_value_cache,
+            )| {
+                let new_vertex_attributes = isolate_attributes(
+                    &vertex_attributes,
+                    orig_vertex_indices.iter().cloned(),
+                    &mut new_attribute_value_cache,
+                );
+                let tetmesh = TetMesh {
+                    vertex_positions: IntrinsicAttribute::from_vec(new_vertex_positions),
+                    indices: IntrinsicAttribute::from_vec(new_indices),
+                    vertex_attributes: new_vertex_attributes,
+                    cell_attributes: new_cell_attributes,
+                    cell_vertex_attributes: new_cell_vertex_attributes,
+                    cell_face_attributes: new_cell_face_attributes,
+                    attribute_value_cache: new_attribute_value_cache,
+                };
+                tetmesh
+            },
+        )
+        .collect::<Vec<_>>();
+
+        (meshes, orig_vertex_index)
+    }
     /// Split the mesh by the given partition.
     ///
     /// Returns a vector of tetmeshes and the mapping from old cell index to new cell index.
@@ -401,9 +527,17 @@ impl<T: Real> TetMesh<T> {
         vertex_partition: &[usize],
         num_parts: usize,
     ) -> (Vec<Self>, Vec<Index>) {
+
+        let num_cells = self.num_cells();
+
         // Fast path, when everything is connected.
         if num_parts == 1 {
-            return (vec![self], vec![]);
+            return (
+                vec![self],
+                (0..num_cells)
+                    .map(|x| Index::new(x))
+                    .collect::<Vec<_>>(),
+            );
         }
 
         // Deconstruct the original mesh.
@@ -528,9 +662,129 @@ macro_rules! impl_split_for_uniform_mesh {
         }
 
         impl<T: Real> $mesh_type<T> {
+            /// Split the mesh by the given face partition.
+            ///
+            /// Returns a vector of meshes and the mapping from new *vertex* indices to old *vertex*
+            /// indices, since some may have been duplicated.
+            /// The faces remain in the same order as in the original mesh.
+            pub fn split_by_face_partition(
+                self,
+                face_partition: &[usize],
+                num_parts: usize,
+            ) -> (Vec<Self>, Vec<Vec<usize>>) {
+                use flatk::zip;
+
+                let num_verts = self.num_vertices();
+
+                // Fast path, when everything is connected.
+                if num_parts == 1 {
+                    return (
+                        vec![self],
+                        vec![(0..num_verts).collect::<Vec<_>>()],
+                    );
+                }
+
+                // Deconstruct the original mesh.
+                let $mesh_type {
+                    vertex_positions,
+                    indices,
+                    vertex_attributes,
+                    face_attributes,
+                    face_vertex_attributes,
+                    face_edge_attributes,
+                    ..
+                } = self;
+
+                let mut new_attribute_value_caches = vec![AttribValueCache::default(); num_parts];
+
+                // Split face_attributes.
+                let new_face_attributes = split_attributes(
+                    &face_attributes,
+                    num_parts,
+                    face_partition.iter().cloned(),
+                    &mut new_attribute_value_caches,
+                );
+
+                // Split face_vertex_attributes.
+                let face_vertex_partition_iter = face_partition
+                    .iter()
+                    .flat_map(|&id| std::iter::repeat(id).take(4));
+                let new_face_vertex_attributes = split_attributes(
+                    &face_vertex_attributes,
+                    num_parts,
+                    face_vertex_partition_iter.clone(),
+                    &mut new_attribute_value_caches,
+                );
+
+                // Split face_edge_attributes.
+                let new_face_edge_attributes = split_attributes(
+                    &face_edge_attributes,
+                    num_parts,
+                    face_vertex_partition_iter,
+                    &mut new_attribute_value_caches,
+                );
+
+                let mut new_vertex_index = vec![vec![Index::invalid(); vertex_positions.len()]; num_parts];
+                let mut orig_vertex_index = vec![Vec::new(); num_parts];
+                let mut new_vertices = vec![Vec::new(); num_parts];
+                let mut new_indices = vec![Vec::new(); num_parts];
+
+                for (&id, &face) in face_partition.iter().zip(indices.iter()) {
+                    new_indices[id].push(face.map(|index| {
+                        if let Some(new_index) = new_vertex_index[id][index].into_option() {
+                            new_index
+                        } else {
+                            let new_index = new_vertices[id].len();
+                            new_vertex_index[id][index] = Index::new(new_index);
+                            new_vertices[id].push(vertex_positions[index]);
+                            orig_vertex_index[id].push(index);
+                            new_index
+                        }
+                    }));
+                }
+                let meshes = zip!(
+                    orig_vertex_index.iter(),
+                    new_vertices.into_iter(),
+                    new_indices.into_iter(),
+                    new_face_attributes.into_iter(),
+                    new_face_vertex_attributes.into_iter(),
+                    new_face_edge_attributes.into_iter(),
+                    new_attribute_value_caches.into_iter()
+                )
+                .map(
+                    |(
+                        orig_vertex_indices,
+                        new_vertex_positions,
+                        new_indices,
+                        new_face_attributes,
+                        new_face_vertex_attributes,
+                        new_face_edge_attributes,
+                        mut new_attribute_value_cache,
+                    )| {
+                        let new_vertex_attributes = isolate_attributes(
+                            &vertex_attributes,
+                            orig_vertex_indices.iter().cloned(),
+                            &mut new_attribute_value_cache,
+                        );
+                        let mesh = $mesh_type {
+                            vertex_positions: IntrinsicAttribute::from_vec(new_vertex_positions),
+                            indices: IntrinsicAttribute::from_vec(new_indices),
+                            vertex_attributes: new_vertex_attributes,
+                            face_attributes: new_face_attributes,
+                            face_vertex_attributes: new_face_vertex_attributes,
+                            face_edge_attributes: new_face_edge_attributes,
+                            attribute_value_cache: new_attribute_value_cache,
+                        };
+                        mesh
+                    },
+                )
+                .collect::<Vec<_>>();
+
+                (meshes, orig_vertex_index)
+            }
             /// Split the mesh by the given partition.
             ///
-            /// Returns a vector of meshes and the mapping from old cell index to new cell index.
+            /// Returns a vector of meshes and the mapping from old face index to new face index.
             fn split_by_vertex_partition(
                 self,
                 vertex_partition: &[usize],
@@ -1336,6 +1590,51 @@ mod tests {
         let (mesh, comp1, comp2) = sample;
         let res = mesh.split_into_connected_components();
         assert_eq!(res, vec![comp1, comp2]);
+    }
+
+    #[test]
+    fn trimesh_split_by_face_attrib() {
+        use crate::algo::Partition;
+
+        let verts = vec![
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 1.0, 1.0],
+        ];
+
+        let indices = vec![
+            [0, 1, 2],
+            [2, 1, 3],
+            [4, 5, 6],
+            [6, 5, 7],
+            [0, 1, 4],
+            [1, 5, 4],
+        ];
+
+        let mut mesh = TriMesh::new(verts, indices);
+
+        // Add an arbitrary vertex attribute
+        mesh.insert_attrib_data::<usize, VertexIndex>("v", (0..mesh.num_vertices()).collect())
+            .unwrap();
+
+        mesh.insert_attrib_data::<usize, FaceIndex>(
+            "data",
+            vec![2,2,0,1,2,0],
+        )
+            .unwrap();
+
+        let (partition, num_parts) = mesh.partition_by_attrib::<usize, FaceIndex>("data");
+
+        let parts = mesh.split_by_face_partition(partition.as_slice(), num_parts).0;
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0].indices.as_slice(), &[[0,1,2], [2,1,3], [0,1,4]][..]);
+        assert_eq!(parts[1].indices.as_slice(), &[[0,1,2], [3,1,0]][..]);
+        assert_eq!(parts[2].indices.as_slice(), &[[0,1,2]][..]);
     }
 
     #[test]
