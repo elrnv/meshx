@@ -253,7 +253,9 @@ impl<T: Real> Mesh<T> {
         // Split cell_vertex_attributes.
         let cell_vertex_partition_iter = cell_partition
             .iter()
-            .flat_map(|&id| std::iter::repeat(id).take(4));
+            .zip(indices.chunks.sizes())
+            .flat_map(|(&id, n)| std::iter::repeat(id).take(n));
+
         let new_cell_vertex_attributes = split_attributes(
             &cell_vertex_attributes,
             num_parts,
@@ -896,7 +898,7 @@ macro_rules! impl_split_for_uniform_mesh {
                 // Split face_vertex_attributes.
                 let face_vertex_partition_iter = face_partition
                     .iter()
-                    .flat_map(|&id| std::iter::repeat(id).take(4));
+                    .flat_map(|&id| std::iter::repeat(id).take($n));
                 let new_face_vertex_attributes = split_attributes(
                     &face_vertex_attributes,
                     num_parts,
@@ -2179,18 +2181,35 @@ mod tests {
             4, 0, 1, 5, 4,
         ]; // tetrahedron
 
-        let mesh = Mesh::from_cells_with_type(points, cells, |i| {
+        let num_cell_vertices = cells.len() - 4;
+
+        let mut mesh = Mesh::from_cells_with_type(points, cells, |i| {
             if i < 2 {
                 CellType::Triangle
             } else {
                 CellType::Tetrahedron
             }
         });
+
+        mesh.insert_attrib_data::<usize, CellVertexIndex>("test", (0..num_cell_vertices).collect())
+            .unwrap();
         let parts = mesh.split_by_cell_partition(&[0, 1, 1, 1], 2).0;
         assert_eq!(parts[0].indices.storage().as_slice(), &[0, 1, 2][..]);
         assert_eq!(
             parts[1].indices.storage().as_slice(),
             &[0, 1, 2, 0, 1, 3, 4, 0, 5, 3][..]
+        );
+        assert_eq!(
+            parts[0]
+                .attrib_as_slice::<usize, CellVertexIndex>("test")
+                .unwrap(),
+            &[0, 1, 2][..]
+        );
+        assert_eq!(
+            parts[1]
+                .attrib_as_slice::<usize, CellVertexIndex>("test")
+                .unwrap(),
+            &[3, 4, 5, 6, 7, 8, 9, 10, 11, 12][..]
         );
     }
 }
