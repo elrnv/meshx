@@ -354,6 +354,77 @@ impl<T: Real> Mesh<T> {
     }
 
     /// Reverse the order of each cell in this mesh.
+    #[inline]
+    pub fn reverse_if<F>(&mut self, predicate: F)
+    where
+        F: Fn(&[usize], CellType) -> bool,
+    {
+        let Self {
+            cell_vertex_attributes,
+            indices,
+            types,
+            ..
+        } = self;
+
+        // We need this small clone to break simultaneous mutable borrow.
+        let chunk_offsets = indices.chunks.chunk_offsets.clone();
+
+        // This monstrocity is all to satisfy the borrow checker.
+        // TODO: Low priority: figure a better way to do this.
+        fn cell_iter<'a, F>(
+            indices: ClumpedView<'a, &'a mut [usize]>,
+            types: &'a [CellType],
+            chunk_offsets: &'a Offsets,
+            predicate: &'a F,
+        ) -> impl Iterator<Item = &'a mut [usize]> + 'a
+        where
+            F: Fn(&[usize], CellType) -> bool + 'a,
+        {
+            indices
+                .into_iter()
+                .zip(
+                    types
+                        .iter()
+                        .zip(chunk_offsets.sizes())
+                        .flat_map(|(&ty, n)| std::iter::repeat(ty).take(n)),
+                )
+                .filter(move |(cell, cell_type)| predicate(&*cell, *cell_type))
+                .map(|(cell, _)| cell)
+        }
+
+        for cell in cell_iter(
+            indices.view_mut(),
+            types.as_mut_slice(),
+            &chunk_offsets,
+            &predicate,
+        ) {
+            cell.reverse();
+        }
+
+        // TODO: Consider doing reversing lazily using a flag field.
+
+        // Since each vertex has an associated cell vertex attribute, we must remap those
+        // as well.
+        // Reverse cell vertex attributes
+        for (_, attrib) in cell_vertex_attributes.iter_mut() {
+            let mut data_slice = attrib.data_mut_slice();
+            for cell in cell_iter(
+                indices.view_mut(),
+                types.as_mut_slice(),
+                &chunk_offsets,
+                &predicate,
+            ) {
+                let mut i = 0usize;
+                let num_verts = cell.len();
+                while i < num_verts / 2 {
+                    data_slice.swap(cell[i], cell[num_verts - i - 1]);
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    /// Reverse the order of each cell in this mesh.
     ///
     ///  This is the consuming version of the `reverse` method.
     #[inline]
@@ -590,8 +661,7 @@ mod tests {
     use super::*;
     use crate::index::Index;
 
-    #[test]
-    fn mesh_test() {
+    fn build_simple_mesh() -> Mesh<f64> {
         let points = vec![
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
@@ -606,13 +676,18 @@ mod tests {
             4, 0, 1, 5, 4, // tetrahedron
         ];
 
-        let mesh = Mesh::from_cells_with_type(points, &cells, |i| {
+        Mesh::from_cells_with_type(points, &cells, |i| {
             if i < 2 {
                 CellType::Triangle
             } else {
                 CellType::Tetrahedron
             }
-        });
+        })
+    }
+
+    #[test]
+    fn mesh_test() {
+        let mesh = build_simple_mesh();
         assert_eq!(mesh.num_vertices(), 6);
         assert_eq!(mesh.num_cells(), 3);
         assert_eq!(mesh.num_cell_vertices(), 10);
@@ -624,6 +699,17 @@ mod tests {
         assert_eq!(mesh.indices.view().at(0), &[0, 1, 2][..]);
         assert_eq!(mesh.indices.view().at(1), &[1, 3, 2][..]);
         assert_eq!(mesh.indices.view().at(2), &[0, 1, 5, 4][..]);
+    }
+
+    #[test]
+    fn reverse_only_triangles() {
+        let mut mesh = build_simple_mesh();
+        mesh.reverse_if(|_, cell_type| matches!(cell_type, CellType::Triangle));
+        let mut cell_iter = mesh.cell_iter();
+        assert_eq!(cell_iter.next(), Some(&[2, 1, 0][..]));
+        assert_eq!(cell_iter.next(), Some(&[2, 3, 1][..]));
+        assert_eq!(cell_iter.next(), Some(&[0, 1, 5, 4][..]));
+        assert_eq!(cell_iter.next(), None);
     }
 
     fn sample_points() -> Vec<[f64; 3]> {
