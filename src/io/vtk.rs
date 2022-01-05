@@ -1,7 +1,7 @@
 use crate::algo::merge::Merge;
 use crate::attrib::{Attrib, AttribDict, AttribIndex, Attribute, AttributeValue};
 use crate::mesh::topology::*;
-use crate::mesh::{PointCloud, PolyMesh, TetMesh, VertexPositions};
+use crate::mesh::{CellType, Mesh, PointCloud, PolyMesh, TetMesh, VertexPositions};
 use flatk::{
     consts::{U10, U11, U12, U13, U14, U15, U16, U2, U3, U4, U5, U6, U7, U8, U9},
     U,
@@ -41,6 +41,61 @@ pub enum VTKPolyExportStyle {
     PolyData,
     /// Use `UnstructuredGrid` VTK type for exporting polygons.
     UnstructuredGrid,
+}
+
+pub fn convert_mesh_to_vtk_format<T: Real>(mesh: &Mesh<T>) -> Result<model::Vtk, Error> {
+    let points: Vec<T> = mesh
+        .vertex_positions()
+        .iter()
+        .flat_map(|x| x.iter().cloned())
+        .collect();
+    let mut vertices = Vec::new();
+    for cell in mesh.cell_iter() {
+        vertices.push(cell.len() as u32);
+        for &vtx in cell.iter() {
+            vertices.push(vtx as u32);
+        }
+    }
+
+    let cell_types: Vec<_> = mesh.cell_type_iter().map(|cell_type| {
+        match cell_type {
+            CellType::Tetrahedron => model::CellType::Tetra,
+            CellType::Triangle=> model::CellType::Triangle,
+        }
+    }).collect();
+
+    let point_attribs = mesh
+        .attrib_dict::<VertexIndex>()
+        .iter()
+        .filter_map(|(name, attrib)| mesh_to_vtk_named_attrib(name, attrib))
+        .collect();
+
+    let cell_attribs = mesh
+        .attrib_dict::<CellIndex>()
+        .iter()
+        .filter_map(|(name, attrib)| mesh_to_vtk_named_attrib(name, attrib))
+        .collect();
+
+    Ok(model::Vtk {
+        version: model::Version::new((0, 1)),
+        title: String::from("Unstructured Mesh"),
+        byte_order: model::ByteOrder::BigEndian,
+        file_path: None,
+        data: model::DataSet::inline(model::UnstructuredGridPiece {
+            points: points.into(),
+            cells: model::Cells {
+                cell_verts: model::VertexNumbers::Legacy {
+                    num_cells: mesh.num_cells() as u32,
+                    vertices,
+                },
+                types: cell_types,
+            },
+            data: model::Attributes {
+                point: point_attribs,
+                cell: cell_attribs,
+            },
+        }),
+    })
 }
 
 pub fn convert_polymesh_to_vtk_format<T: Real>(
@@ -228,7 +283,102 @@ pub fn convert_pointcloud_to_vtk_format<T: Real>(
     })
 }
 
+// TODO: Refactor the functions below to reuse code.
 impl<T: Real> MeshExtractor<T> for model::Vtk {
+    /// Constructs an unstructured Mesh from this VTK model.
+    ///
+    /// This function will clone the given model as necessary.
+    fn extract_mesh(&self) -> Result<Mesh<T>, Error> {
+        let model::Vtk {
+            file_path, data, ..
+        } = &self;
+        match data {
+            model::DataSet::UnstructuredGrid { pieces, .. } => {
+                Ok(Mesh::merge_iter(pieces.iter().filter_map(|piece| {
+                    let model::UnstructuredGridPiece {
+                        points,
+                        cells: model::Cells { cell_verts, types },
+                        data,
+                    } = piece
+                        .load_piece_data(file_path.as_ref().map(AsRef::as_ref))
+                        .ok()?;
+                    // Get points.
+                    let pt_coords: Vec<T> = points.cast_into()?;
+                    let mut pts = Vec::with_capacity(pt_coords.len() / 3);
+                    for coords in pt_coords.chunks_exact(3) {
+                        pts.push([coords[0], coords[1], coords[2]]);
+                    }
+
+                    let num_cells = cell_verts.num_cells();
+                    let (connectivity, offsets) = cell_verts.into_xml();
+
+                    // Mapping to original topology. This is used when the vtk file has elements
+                    // not supported by our Mesh.
+                    let mut orig_cell_idx = Vec::with_capacity(num_cells);
+
+                    // Get contiguous indices (4 vertex indices for each tet or 3 for triangles).
+                    let mut begin = 0usize;
+                    let mut indices = Vec::new();
+                    let mut counts = Vec::new();
+                    let mut cell_types = Vec::new();
+                    for (c, &end) in offsets.iter().enumerate() {
+                        let n = end as usize - begin;
+                        let cell_type = match types[c] {
+                            model::CellType::Triangle if n == 3 => CellType::Triangle,
+                            model::CellType::Tetra if n == 4 => CellType::Tetrahedron,
+                            _ => {
+                                // Not a valid cell type, skip it.
+                                begin = end as usize;
+                                continue;
+                            }
+                        };
+
+                        if cell_types.is_empty() || *cell_types.last().unwrap() != cell_type {
+                            // Start a new block.
+                            cell_types.push(cell_type);
+                            counts.push(1);
+                        } else {
+                            if let Some(last) = counts.last_mut() {
+                                *last += 1;
+                            } else {
+                                // Bug in the code. Counts must have the same size as cell_types.
+                                return None;
+                            }
+                        }
+
+                        orig_cell_idx.push(c);
+                        for i in 0..n {
+                            indices.push(connectivity[begin + i] as usize);
+                        }
+                        begin = end as usize;
+                    }
+
+                    let mut mesh = Mesh::from_cells_counts_and_types(pts, indices, counts, cell_types);
+
+                    // Don't bother transferring attributes if there are no vertices or cells.
+                    // This supresses some needless size mismatch warnings when the dataset has an
+                    // unstructuredgrid representing something other than a recognizable Mesh.
+
+                    if mesh.num_vertices() > 0 {
+                        // Populate point attributes.
+                        vtk_to_mesh_attrib::<_, VertexIndex>(data.point, &mut mesh, None);
+                    }
+
+                    if mesh.num_cells() > 0 {
+                        // Populate tet attributes
+                        vtk_to_mesh_attrib::<_, CellIndex>(
+                            data.cell,
+                            &mut mesh,
+                            Some(orig_cell_idx.as_slice()),
+                        );
+                    }
+
+                    Some(mesh)
+                })))
+            }
+            _ => Err(Error::UnsupportedDataFormat),
+        }
+    }
     /// Constructs a PolyMesh from this VTK model.
     ///
     /// This function will clone the given model as necessary.

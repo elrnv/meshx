@@ -3,7 +3,7 @@ use std::path::Path;
 pub use vtkio::Vtk;
 
 use crate::attrib;
-use crate::mesh::{PointCloud, PolyMesh, TetMesh};
+use crate::mesh::{Mesh, PointCloud, PolyMesh, TetMesh};
 
 pub mod obj;
 pub mod vtk;
@@ -20,6 +20,12 @@ const NORMAL_ATTRIB_NAME: &str = "N";
 // All methods are optional and default implementations simply return an `UnsupportedDataFormat` error.
 // This trait defines an API for converting file specific object models to `meshx` mesh formats.
 pub trait MeshExtractor<T: crate::Real> {
+    /// Constructs an unstructured Mesh from this VTK model.
+    ///
+    /// This function may clone the given model as necessary.
+    fn extract_mesh(&self) -> Result<Mesh<T>, Error> {
+        Err(Error::UnsupportedDataFormat)
+    }
     /// Constructs a PolyMesh from this VTK model.
     ///
     /// This function may clone the given model as necessary.
@@ -37,6 +43,64 @@ pub trait MeshExtractor<T: crate::Real> {
     /// This function may clone the given model as necessary.
     fn extract_pointcloud(&self) -> Result<PointCloud<T>, Error> {
         Err(Error::UnsupportedDataFormat)
+    }
+}
+
+/*
+ * IO calls for unstructured Meshes
+ */
+
+/// Load a tetrahedral mesh from a given file.
+pub fn load_mesh<T: Real, P: AsRef<Path>>(file: P) -> Result<Mesh<T>, Error> {
+    load_mesh_impl(file.as_ref())
+}
+
+fn load_mesh_impl<T: Real>(file: &Path) -> Result<Mesh<T>, Error> {
+    match file.extension().and_then(|ext| ext.to_str()) {
+        Some("vtk") | Some("vtu") | Some("pvtu") => {
+            let vtk = Vtk::import(file)?;
+            vtk.extract_mesh()
+        }
+        // NOTE: wavefront obj files don't support unstructured meshes.
+        _ => Err(Error::UnsupportedFileFormat),
+    }
+}
+
+/// Save a mesh to a file.
+pub fn save_mesh<T: Real, P: AsRef<Path>>(mesh: &Mesh<T>, file: P) -> Result<(), Error> {
+    save_mesh_impl(mesh, file.as_ref())
+}
+
+fn save_mesh_impl<T: Real>(mesh: &Mesh<T>, file: &Path) -> Result<(), Error> {
+    match file.extension().and_then(|ext| ext.to_str()) {
+        Some("vtk") | Some("vtu") | Some("pvtu") => {
+            let vtk = vtk::convert_mesh_to_vtk_format(mesh)?;
+            vtk.export_be(file)?;
+            Ok(())
+        }
+        // NOTE: wavefront obj files don't support unstructured meshes.
+        _ => Err(Error::UnsupportedFileFormat),
+    }
+}
+
+/// Save a mesh to a file in ASCII format.
+pub fn save_mesh_ascii<T: Real>(
+    mesh: &Mesh<T>,
+    file: impl AsRef<Path>,
+) -> Result<(), Error> {
+    save_mesh_ascii_impl(mesh, file.as_ref())
+}
+
+fn save_mesh_ascii_impl<T: Real>(mesh: &Mesh<T>, file: &Path) -> Result<(), Error> {
+    match file.extension() {
+        Some(ext) if ext.to_str() == Some("vtk") => {
+            // NOTE: Currently writing to ascii is supported only for Legacy VTK files.
+            let vtk = vtk::convert_mesh_to_vtk_format(mesh)?;
+            vtk.export_ascii(file)?;
+            Ok(())
+        }
+        // NOTE: wavefront obj files don't support unstructured meshes.
+        _ => Err(Error::UnsupportedFileFormat),
     }
 }
 
