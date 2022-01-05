@@ -57,12 +57,13 @@ pub fn convert_mesh_to_vtk_format<T: Real>(mesh: &Mesh<T>) -> Result<model::Vtk,
         }
     }
 
-    let cell_types: Vec<_> = mesh.cell_type_iter().map(|cell_type| {
-        match cell_type {
+    let cell_types: Vec<_> = mesh
+        .cell_type_iter()
+        .map(|cell_type| match cell_type {
             CellType::Tetrahedron => model::CellType::Tetra,
-            CellType::Triangle=> model::CellType::Triangle,
-        }
-    }).collect();
+            CellType::Triangle => model::CellType::Triangle,
+        })
+        .collect();
 
     let point_attribs = mesh
         .attrib_dict::<VertexIndex>()
@@ -353,7 +354,8 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                         begin = end as usize;
                     }
 
-                    let mut mesh = Mesh::from_cells_counts_and_types(pts, indices, counts, cell_types);
+                    let mut mesh =
+                        Mesh::from_cells_counts_and_types(pts, indices, counts, cell_types);
 
                     // Don't bother transferring attributes if there are no vertices or cells.
                     // This supresses some needless size mismatch warnings when the dataset has an

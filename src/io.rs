@@ -84,10 +84,7 @@ fn save_mesh_impl<T: Real>(mesh: &Mesh<T>, file: &Path) -> Result<(), Error> {
 }
 
 /// Save a mesh to a file in ASCII format.
-pub fn save_mesh_ascii<T: Real>(
-    mesh: &Mesh<T>,
-    file: impl AsRef<Path>,
-) -> Result<(), Error> {
+pub fn save_mesh_ascii<T: Real>(mesh: &Mesh<T>, file: impl AsRef<Path>) -> Result<(), Error> {
     save_mesh_ascii_impl(mesh, file.as_ref())
 }
 
