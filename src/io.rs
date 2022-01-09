@@ -5,10 +5,20 @@ pub use vtkio::Vtk;
 use crate::attrib;
 use crate::mesh::{Mesh, PointCloud, PolyMesh, TetMesh};
 
+#[cfg(feature = "mshio")]
+pub mod msh;
 pub mod obj;
 pub mod vtk;
-pub trait Real: vtkio::model::Scalar + crate::Real {}
-impl<T> Real for T where T: vtkio::model::Scalar + crate::Real {}
+
+#[cfg(feature = "vtkio")]
+pub trait Real: vtkio::model::Scalar + std::str::FromStr + crate::Real {}
+#[cfg(feature = "vtkio")]
+impl<T> Real for T where T: vtkio::model::Scalar + std::str::FromStr + crate::Real {}
+
+#[cfg(not(feature = "vtkio"))]
+pub trait Real: crate::Real + std::str::FromStr {}
+#[cfg(not(feature = "vtkio"))]
+impl<T> Real for T where T: crate::Real + std::str::FromStr {}
 
 // These names are chosen to be rather short to reduce the const of comparisons.
 // Although code that relies on this is not idiomatic, it can sometimes be simpler.
@@ -60,6 +70,12 @@ fn load_mesh_impl<T: Real>(file: &Path) -> Result<Mesh<T>, Error> {
         Some("vtk") | Some("vtu") | Some("pvtu") => {
             let vtk = Vtk::import(file)?;
             vtk.extract_mesh()
+        }
+        #[cfg(feature = "mshio")]
+        Some("msh") => {
+            let msh_bytes = std::fs::read(file)?;
+            let msh = mshio::parse_msh_bytes(msh_bytes.as_slice()).map_err(msh::MshError::from)?;
+            msh.extract_mesh()
         }
         // NOTE: wavefront obj files don't support unstructured meshes.
         _ => Err(Error::UnsupportedFileFormat),
@@ -312,13 +328,22 @@ fn save_pointcloud_ascii_impl<T: Real>(ptcloud: &PointCloud<T>, file: &Path) -> 
 
 #[derive(Debug)]
 pub enum MeshIOError {
-    Vtk { source: vtk::VtkError },
-    Obj { source: obj::ObjError },
+    #[cfg(feature = "mshio")]
+    Msh {
+        source: msh::MshError,
+    },
+    Vtk {
+        source: vtk::VtkError,
+    },
+    Obj {
+        source: obj::ObjError,
+    },
 }
 
 impl std::error::Error for MeshIOError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            MeshIOError::Msh { source } => Some(source),
             MeshIOError::Vtk { source } => Some(source),
             MeshIOError::Obj { source } => Some(source),
         }
@@ -328,6 +353,7 @@ impl std::error::Error for MeshIOError {
 impl std::fmt::Display for MeshIOError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            MeshIOError::Msh { source } => write!(f, "A Msh IO error occurred: {}", source),
             MeshIOError::Vtk { source } => write!(f, "A Vtk IO error occurred: {}", source),
             MeshIOError::Obj { source } => write!(f, "An Obj IO error occurred: {}", source),
         }
@@ -375,6 +401,15 @@ impl std::fmt::Display for Error {
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Error {
         Error::IO { source: err }
+    }
+}
+
+#[cfg(feature = "mshio")]
+impl From<msh::MshError> for Error {
+    fn from(err: msh::MshError) -> Error {
+        Error::MeshIO {
+            source: MeshIOError::Msh { source: err },
+        }
     }
 }
 
@@ -455,5 +490,15 @@ mod tests {
     #[test]
     fn unstructured_data_polymesh_real_test() {
         assert!(load_polymesh::<f64, _>("./assets/tube.vtk").is_ok());
+    }
+
+    // Msh file loading test
+    #[test]
+    fn sphere_msh() -> Result<(), Error> {
+        use crate::mesh::topology::*;
+        let mesh: Mesh<f64> = load_mesh("assets/sphere_coarse.msh")?;
+        assert_eq!(mesh.num_vertices(), 183);
+        assert_eq!(mesh.num_cells(), 593);
+        Ok(())
     }
 }
