@@ -366,7 +366,7 @@ impl<T: Real> Mesh<T> {
     /// use meshx::mesh::{Mesh, CellType};
     /// use meshx::attrib::*;
     /// use meshx::algo::TypedMesh;
-    /// use meshx::VertexIndex;
+    /// use meshx::topology::VertexIndex;
     ///
     /// let points = vec![
     ///     [0.0, 0.0, 0.0],
