@@ -216,7 +216,8 @@ meshx::io::save_trimesh(&mesh, "../tests/artifacts/tutorial_trimesh.vtk").unwrap
 
 This can then be loaded from another application like ParaView. Here is our mesh with the
 associated vectors shown as arrows:
-![TriMesh ParaView Screenshot](../assets/tutorial_paraview_screenshot.png)
+![TriMesh ParaView
+Screenshot](https://raw.githubusercontent.com/elrnv/meshx/master/assets/tutorial_paraview_screenshot.png)
 
 We can also load this file back using `load_trimesh`.
 
@@ -244,7 +245,7 @@ In this short tutorial we have covered
  - Inserting attribute data on mesh vertices
  - Saving and loading a mesh to and from a file.
 
-The code in this tutorial is available in `[examples/tutorial.rs](examples/tutorial.rs)` and can be
+The code in this tutorial is available in [`examples/tutorial.rs`](examples/tutorial.rs) and can be
 run with
 ```
 $ cargo run --example tutorial
