@@ -41,6 +41,10 @@ macro_rules! impl_uniform_surface_mesh {
             }
 
             /// Face accessor. These are vertex indices.
+            ///
+            /// # Panics
+            ///
+            /// This function panics when the given face index is out of bounds.
             #[inline]
             pub fn face<FI: Into<FaceIndex>>(&self, fidx: FI) -> &[usize; $verts_per_face] {
                 &self.indices[fidx.into()]

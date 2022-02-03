@@ -1,5 +1,13 @@
 #![cfg_attr(feature = "unstable", feature(test, core_intrinsics, trace_macros))]
 
+//! A mesh exchange library for providing convenient conversion utilities between popular mesh formats.
+//!
+//! # Overview
+//!
+//! This library is designed to simplify interoperability between different 3D applications using mesh data
+//! structures. `meshx` also provides common mesh types and APIs to work with attributes.
+
+
 #[macro_use]
 extern crate meshx_derive;
 
@@ -26,7 +34,7 @@ pub mod utils {
 
 // public re-exports
 pub use self::index::Index;
-pub use crate::mesh::topology::*;
+pub use crate::mesh::*;
 
 /// Plain old data trait. Types that implement this trait contain no references and can be copied
 /// with `memcpy`. The additional `Any` trait lets us inspect the type more easily.

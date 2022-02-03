@@ -1,9 +1,19 @@
+//! IO module for mesh files.
+//!
+//! Supported formats for loading:
+//!  - `msh` via [`mshio`](https://crates.io/mshio).
+//!  - `obj` via [`obj`](https://crates.io/obj).
+//!  - `vtk` via [`vtkio`](https://crates.io/vtkio).
+//!
+//! Supported formats for saving:
+//!  - `obj` via [`obj`](https://crates.io/obj).
+//!  - `vtk` via [`vtkio`](https://crates.io/vtkio).
 use std::path::Path;
 
 pub use vtkio::Vtk;
 
 use crate::attrib;
-use crate::mesh::{Mesh, PointCloud, PolyMesh, TetMesh};
+use crate::mesh::{Mesh, PointCloud, PolyMesh, TetMesh, TriMesh};
 
 #[cfg(feature = "mshio")]
 pub mod msh;
@@ -25,10 +35,10 @@ impl<T> Real for T where T: crate::Real + std::str::FromStr {}
 const UV_ATTRIB_NAME: &str = "uv";
 const NORMAL_ATTRIB_NAME: &str = "N";
 
-// A trait for specific scene, object or mesh models to extract mesh data from.
-//
-// All methods are optional and default implementations simply return an `UnsupportedDataFormat` error.
-// This trait defines an API for converting file specific object models to `meshx` mesh formats.
+/// A trait for specific scene, object or mesh models to extract mesh data from.
+///
+/// All methods are optional and default implementations simply return an `UnsupportedDataFormat` error.
+/// This trait defines an API for converting file specific object models to `meshx` mesh formats.
 pub trait MeshExtractor<T: crate::Real> {
     /// Constructs an unstructured Mesh from this VTK model.
     ///
@@ -247,6 +257,35 @@ fn save_polymesh_ascii_impl<T: Real>(polymesh: &PolyMesh<T>, file: &Path) -> Res
         }
         _ => Err(Error::UnsupportedFileFormat),
     }
+}
+
+/*
+ * IO calls for TriMeshes
+ *
+ * NOTE: These functions simply call into PolyMesh IO API, since it allows for
+ * more flexibility (e.g. can load polymesh as a trimesh by triangulating) and
+ * code reuse.
+ */
+
+/// Loads a triangle mesh from a given file.
+pub fn load_trimesh<T: Real, P: AsRef<Path>>(file: P) -> Result<TriMesh<T>, Error> {
+    load_polymesh_impl(file.as_ref()).map(|m| TriMesh::from(m))
+}
+
+/// Saves a triangle mesh to a file.
+pub fn save_trimesh<T: Real, P: AsRef<Path>>(
+    trimesh: &TriMesh<T>,
+    file: P,
+) -> Result<(), Error> {
+    save_polymesh_impl(&PolyMesh::from(trimesh.clone()), file.as_ref())
+}
+
+/// Saves a triangle mesh to a file.
+pub fn save_trimesh_ascii<T: Real, P: AsRef<Path>>(
+    trimesh: &TriMesh<T>,
+    file: P,
+) -> Result<(), Error> {
+    save_polymesh_ascii_impl(&PolyMesh::from(trimesh.clone()), file.as_ref())
 }
 
 /*
