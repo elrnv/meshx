@@ -244,6 +244,12 @@ In this short tutorial we have covered
  - Inserting attribute data on mesh vertices
  - Saving and loading a mesh to and from a file.
 
+The code in this tutorial is available in `[examples/tutorial.rs](examples/tutorial.rs)` and can be
+run with
+```
+$ cargo run --example tutorial
+```
+
 For more details on the API, please consult the [documentation](https://docs.rs/meshx).
 
 
