@@ -273,10 +273,7 @@ pub fn load_trimesh<T: Real, P: AsRef<Path>>(file: P) -> Result<TriMesh<T>, Erro
 }
 
 /// Saves a triangle mesh to a file.
-pub fn save_trimesh<T: Real, P: AsRef<Path>>(
-    trimesh: &TriMesh<T>,
-    file: P,
-) -> Result<(), Error> {
+pub fn save_trimesh<T: Real, P: AsRef<Path>>(trimesh: &TriMesh<T>, file: P) -> Result<(), Error> {
     save_polymesh_impl(&PolyMesh::from(trimesh.clone()), file.as_ref())
 }
 

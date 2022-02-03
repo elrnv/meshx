@@ -6,10 +6,10 @@ fn main() {
 
     // Four corners of a [0,0]x[1,1] square in the xy-plane.
     let vertices = vec![
-	[0.0f64, 0.0, 0.0],
-	[1.0, 0.0, 0.0],
-	[0.0, 1.0, 0.0],
-	[1.0, 1.0, 0.0],
+        [0.0f64, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [1.0, 1.0, 0.0],
     ];
 
     // Two triangles making up a square.
@@ -23,7 +23,7 @@ fn main() {
     /*
      * Simple count queries
      */
- 
+
     println!("number of vertices: {}", mesh.num_vertices());
     println!("number of faces: {}", mesh.num_faces());
     println!("number of face-edges: {}", mesh.num_face_edges());
@@ -37,14 +37,26 @@ fn main() {
     println!("face 1: {:?}", mesh.face(1));
 
     // Face-edge topology:
-    println!("face-edge index of edge 2 on face 1: {:?}", mesh.face_edge(1, 2));
+    println!(
+        "face-edge index of edge 2 on face 1: {:?}",
+        mesh.face_edge(1, 2)
+    );
     println!("edge index of face-edge 5: {:?}", mesh.edge(5));
-    println!("edge index of edge 2 on face 1: {:?}", mesh.face_to_edge(1, 2));
-    
+    println!(
+        "edge index of edge 2 on face 1: {:?}",
+        mesh.face_to_edge(1, 2)
+    );
+
     // Face-vertex topology:
-    println!("face-vertex index of vertex 1 on face 0: {:?}", mesh.face_vertex(0, 1));
+    println!(
+        "face-vertex index of vertex 1 on face 0: {:?}",
+        mesh.face_vertex(0, 1)
+    );
     println!("vertex index of face-vertex 1: {:?}", mesh.vertex(1));
-    println!("vertex index of vertex 1 on face 0: {:?}", mesh.face_vertex(0, 1));
+    println!(
+        "vertex index of vertex 1 on face 0: {:?}",
+        mesh.face_vertex(0, 1)
+    );
 
     /*
      * Attributes
@@ -68,10 +80,10 @@ fn main() {
      * IO: loading and saving meshes
      */
 
-    meshx::io::save_trimesh(&mesh, "../tests/artifacts/tutorial_trimesh.vtk")
+    meshx::io::save_trimesh(&mesh, "tests/artifacts/tutorial_trimesh.vtk")
         .expect("Failed to save the tutorial triangle mesh");
 
-    let loaded_mesh = meshx::io::load_trimesh("../tests/artifacts/tutorial_trimesh.vtk")
+    let loaded_mesh = meshx::io::load_trimesh("tests/artifacts/tutorial_trimesh.vtk")
         .expect("Failed to load the tutorial triangle mesh");
 
     assert_eq!(mesh, loaded_mesh);

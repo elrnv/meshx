@@ -7,7 +7,6 @@
 //! This library is designed to simplify interoperability between different 3D applications using mesh data
 //! structures. `meshx` also provides common mesh types and APIs to work with attributes.
 
-
 #[macro_use]
 extern crate meshx_derive;
 

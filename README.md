@@ -211,7 +211,7 @@ the structures that store these attributes. For more details see the
 Using the `io` module we can load and store meshes. To save our triangle mesh to a file, we can
 simply call `save_trimesh` specifying a path:
 ```rust
-meshx::io::save_trimesh(&mesh, "../tests/artifacts/tutorial_trimesh.vtk").unwrap();
+meshx::io::save_trimesh(&mesh, "tests/artifacts/tutorial_trimesh.vtk").unwrap();
 ```
 
 This can then be loaded from another application like ParaView. Here is our mesh with the
@@ -222,7 +222,7 @@ Screenshot](https://raw.githubusercontent.com/elrnv/meshx/master/assets/tutorial
 We can also load this file back using `load_trimesh`.
 
 ```rust
-let loaded_mesh = meshx::io::load_trimesh("../tests/artifacts/tutorial_trimesh.vtk").unwrap();
+let loaded_mesh = meshx::io::load_trimesh("tests/artifacts/tutorial_trimesh.vtk").unwrap();
 ```
 
 See the [`io`](https://docs.rs/meshx/latest/meshx/io/index.html) module for supported formats.
