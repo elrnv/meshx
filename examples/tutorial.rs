@@ -80,11 +80,14 @@ fn main() {
      * IO: loading and saving meshes
      */
 
-    meshx::io::save_trimesh(&mesh, "tests/artifacts/tutorial_trimesh.vtk")
-        .expect("Failed to save the tutorial triangle mesh");
+    #[cfg(features = "io")]
+    {
+        meshx::io::save_trimesh(&mesh, "tests/artifacts/tutorial_trimesh.vtk")
+            .expect("Failed to save the tutorial triangle mesh");
 
-    let loaded_mesh = meshx::io::load_trimesh("tests/artifacts/tutorial_trimesh.vtk")
-        .expect("Failed to load the tutorial triangle mesh");
+        let loaded_mesh = meshx::io::load_trimesh("tests/artifacts/tutorial_trimesh.vtk")
+            .expect("Failed to load the tutorial triangle mesh");
 
-    assert_eq!(mesh, loaded_mesh);
+        assert_eq!(mesh, loaded_mesh);
+    }
 }
