@@ -1,6 +1,6 @@
 [package]
 name = "meshx"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Egor Larionov <egor.larionov@gmail.com>"]
 description = "A mesh eXchange library with conversion utilities for popular mesh formats."
 edition = "2018"
@@ -29,6 +29,7 @@ rand = "0.8"
 approx = "0.5"
 criterion = { version = "0.3" }
 autodiff = { version = "0.4", features = ["na"] }
+ron = "0.7"
 
 [features]
 default = ["io"]
