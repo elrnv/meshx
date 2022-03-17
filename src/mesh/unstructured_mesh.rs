@@ -78,9 +78,9 @@ impl<T: Real> Mesh<T> {
     ///     vec![
     ///         0, 1, 2, // first triangle
     ///         1, 3, 2, // second triangle
-    ///     ], 
+    ///     ],
     ///     vec![0, 1, 5, 4], // tetrahedron
-    /// ]; 
+    /// ];
     /// let types = vec![CellType::Triangle, CellType::Tetrahedron];
     ///
     /// let mesh = Mesh::from_cells_and_types(points, cells, types);
@@ -98,11 +98,7 @@ impl<T: Real> Mesh<T> {
         cells: impl Into<Vec<Vec<usize>>>,
         types: impl Into<Vec<CellType>>,
     ) -> Mesh<T> {
-        Self::from_cells_and_types_impl(
-            verts.into(),
-            cells.into(),
-            types.into(),
-        )
+        Self::from_cells_and_types_impl(verts.into(), cells.into(), types.into())
     }
 
     // A non-generic implementation of the `from_cells_and_types` constructor.
@@ -113,7 +109,11 @@ impl<T: Real> Mesh<T> {
     ) -> Mesh<T> {
         assert_eq!(cells.len(), types.len());
         let sizes: Vec<_> = types.iter().map(CellType::num_verts).collect();
-        let counts: Vec<_> = sizes.iter().zip(cells.iter()).map(|(s, c)| c.len() / s).collect();
+        let counts: Vec<_> = sizes
+            .iter()
+            .zip(cells.iter())
+            .map(|(s, c)| c.len() / s)
+            .collect();
         let cells = cells.into_iter().flatten().collect();
         let clumped_indices = flatk::Clumped::from_sizes_and_counts(sizes, counts, cells);
 
