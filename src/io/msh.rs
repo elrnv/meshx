@@ -1,4 +1,5 @@
 use crate::mesh::{CellType, Mesh};
+use ahash::AHashMap as HashMap;
 use std::fmt::{Display, Formatter};
 
 use super::Error;
@@ -41,7 +42,7 @@ impl<T: Real + std::str::FromStr> MeshExtractor<T> for MshFile<u64, i32, f64> {
         let mut vertices = Vec::new();
 
         // A map from node tag to its position in the output vertices vector.
-        let mut point_map = hashbrown::HashMap::new();
+        let mut point_map = HashMap::new();
 
         let mut add_node = |node_tag: u64, node: &Node<f64>| -> usize {
             *point_map.entry(node_tag).or_insert_with(|| {

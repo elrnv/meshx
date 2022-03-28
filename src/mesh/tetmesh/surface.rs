@@ -6,7 +6,8 @@ use crate::Real;
 
 use super::TetMesh;
 
-type HashMap<K, V> = hashbrown::HashMap<K, V>;
+use ahash::AHashMap as HashMap;
+use ahash::RandomState;
 
 /// A triangle with sorted vertices
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Debug)]
@@ -109,8 +110,7 @@ impl<T: Real> TetMesh<T> {
     ) -> HashMap<SortedTri, TetFace> {
         let mut triangles: HashMap<SortedTri, TetFace> = {
             // This will make surfacing tetmeshes deterministic.
-            let hash_builder =
-                hashbrown::hash_map::DefaultHashBuilder::with_seeds(7, 47, 2377, 719);
+            let hash_builder = RandomState::with_seeds(7, 47, 2377, 719);
             HashMap::with_capacity_and_hasher(cells.len() * 4, hash_builder)
         };
 

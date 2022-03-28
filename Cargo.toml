@@ -17,7 +17,7 @@ dync = { version = "0.5", features = ['numeric'] }
 bytemuck = { version = "1.5", features = ["extern_crate_alloc"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 rayon = { version = "1", optional = true }
-hashbrown = { version = "0.11" }
+ahash = { version = "0.7" }
 math = { package = "nalgebra", version = "0.30" }
 flatk = { git = "https://github.com/elrnv/flatk.git", version = "0.5" }
 vtkio = { version = "0.6", optional = true }

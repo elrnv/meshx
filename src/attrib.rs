@@ -22,7 +22,7 @@
 
 use std::any::{Any, TypeId};
 //use std::collections::HashMap;
-use hashbrown::HashMap;
+use ahash::AHashMap as HashMap;
 use std::slice;
 
 use dync::{traits::HasDrop, VecDyn};
@@ -34,8 +34,7 @@ mod bytes;
 mod index;
 
 // Expose the entry API for our AttribDict type.
-//pub use std::collections::hash_map::Entry;
-pub use hashbrown::hash_map::Entry;
+pub use std::collections::hash_map::Entry;
 
 pub use attribute::*;
 pub use bytes::*;

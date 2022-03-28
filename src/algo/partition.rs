@@ -12,7 +12,7 @@
  */
 
 use crate::attrib::*;
-use hashbrown::HashMap;
+use ahash::AHashMap as HashMap;
 use std::hash::Hash;
 
 /*

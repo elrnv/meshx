@@ -9,7 +9,10 @@ use crate::mesh::PolyMesh;
 use crate::prim::Triangle;
 use crate::utils::slice::*;
 use crate::Real;
+use std::hash::Hash;
 use std::slice::{Iter, IterMut};
+
+use ahash::AHashMap as HashMap;
 
 /*
  * Commonly used meshes and their implementations.
@@ -163,6 +166,82 @@ macro_rules! impl_uniform_surface_mesh {
                 }
 
                 order
+            }
+
+            /// Fuses vertices with matching attribute value together.
+            ///
+            /// If two or more vertices have the same value for the given attribute,
+            /// they are fused into one. The given function `join`s the positions
+            /// of vertices whose attribute value matches.
+            pub fn fuse_vertices_by_attrib<K, F>(&mut self, attrib_name: &str, join: F) -> Result<(), Error>
+            where K: Hash + Eq + Clone + 'static,
+                  F: Fn(&[[T; 3]]) -> [T; 3]
+            {
+                let $mesh_type {
+                    vertex_positions,
+                    indices,
+                    vertex_attributes,
+                    // Other face attributes are unchanged.
+                    ..
+                } = self;
+
+                // Create a map from attrib value to vertex index.
+                let mut new_vertices: Vec<Vec<usize>> = Vec::new();
+                let mut vertex_map: HashMap<K, usize> = HashMap::new();
+                let attrib = vertex_attributes.get(attrib_name).ok_or(
+                    crate::attrib::Error::DoesNotExist(attrib_name.to_string())
+                )?;
+
+                for (vtx_idx, attrib_value) in attrib.iter()?.enumerate() {
+                    // TODO: Best replaced by raw_entry or entry_or_clone type call:
+                    // https://github.com/rust-lang/rfcs/issues/1203
+                    if let Some(new_idx) = vertex_map.get_mut(attrib_value) {
+                        new_vertices[*new_idx].push(vtx_idx)
+                    } else {
+                        vertex_map.insert(attrib_value.clone(), new_vertices.len());
+                        new_vertices.push(vec![vtx_idx]);
+                    }
+                }
+
+                // Fuse vertex positions, and construct a mapping to new vertices.
+                let mut new_idx = vec![0; vertex_positions.len()];
+                let mut orig_idx = Vec::new();
+                let mut new_vertex_positions = Vec::new();
+                let mut pos_buffer = Vec::new();
+                for verts in new_vertices.iter() {
+                    pos_buffer.clear();
+                    pos_buffer.extend(verts.iter().map(|&i| vertex_positions[i]));
+                    let fused = join(pos_buffer.as_slice());
+                    for &i in verts.iter() {
+                        new_idx[i] = new_vertex_positions.len();
+                    }
+                    new_vertex_positions.push(fused);
+                    // Take first representative. This will not panic since every entry has at least
+                    // one vertex, otherwise it wouldn't exist in vertex_map or new_vertices.
+                    orig_idx.push(*verts.first().unwrap());
+                }
+
+                // Rewire faces.
+                for face in indices.iter_mut() {
+                    for v in face.iter_mut() {
+                        *v = new_idx[*v];
+                    }
+                }
+
+                // Rewire vertex attributes.
+                for (_, attrib) in vertex_attributes.iter_mut() {
+                    // Overwrite the current attribute with a pruned version.
+                    *attrib = attrib.duplicate_with(|output, input| {
+                        for v in orig_idx.iter().map(|&i| input.get(i)) {
+                            output.push_cloned(v);
+                        }
+                    })
+                }
+
+                // Finally overwrite vertex positions with new ones.
+                *vertex_positions = IntrinsicAttribute::from(new_vertex_positions);
+
+                Ok(())
             }
         }
 
@@ -770,6 +849,56 @@ mod tests {
             vec![1, 2, 2, 3, 3, 1, 4, 5, 5, 6, 6, 7, 7, 4, 8, 9],
         )?;
         assert_eq!(linemesh, LineMesh::from(polymesh));
+        Ok(())
+    }
+
+    /// Test fusing vertices based on an attribute value.
+    #[test]
+    fn trimesh_fuse() -> Result<(), Error> {
+        let points = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0], // same as vertex at index 2
+        ];
+        let faces = vec![
+            [0, 1, 2], // first triangle
+            [1, 3, 4], // second triangle
+        ];
+
+        let mut trimesh = crate::mesh::TriMesh::new(points.clone(), faces.clone());
+        trimesh.insert_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4, 5])?;
+        trimesh.insert_attrib_data::<u64, FaceIndex>("f", vec![1, 2])?;
+        trimesh.insert_attrib_data::<u64, FaceVertexIndex>("vf", vec![1, 2, 3, 4, 5, 6])?;
+        trimesh.insert_attrib_data::<u64, FaceEdgeIndex>("ve", vec![1, 2, 3, 4, 5, 6])?;
+
+        // Fuse the 3rd and last vertices.
+        trimesh.insert_attrib_data::<u64, VertexIndex>("fuse", vec![1, 2, 3, 4, 3])?;
+        trimesh.fuse_vertices_by_attrib::<u64, _>("fuse", |verts| {
+            verts.iter().fold([0.0; 3], |mut acc, pos| {
+                for i in 0..3 {
+                    acc[i] += pos[i] / verts.len() as f64;
+                }
+                acc
+            })
+        })?;
+
+        // Construct expected mesh
+        let exp_points = points.into_iter().take(4).collect::<Vec<_>>();
+        let mut exp_faces = faces;
+        exp_faces[1][2] = 2; // Rewire as should be expected.
+
+        let mut exp_trimesh = crate::mesh::TriMesh::new(exp_points, exp_faces);
+        exp_trimesh.insert_attrib_data::<u64, VertexIndex>("v", vec![1, 2, 3, 4])?;
+        exp_trimesh.insert_attrib_data::<u64, FaceIndex>("f", vec![1, 2])?;
+        exp_trimesh.insert_attrib_data::<u64, FaceVertexIndex>("vf", vec![1, 2, 3, 4, 5, 6])?;
+        exp_trimesh.insert_attrib_data::<u64, FaceEdgeIndex>("ve", vec![1, 2, 3, 4, 5, 6])?;
+
+        // Fuse the 3rd and last vertices.
+        exp_trimesh.insert_attrib_data::<u64, VertexIndex>("fuse", vec![1, 2, 3, 4])?;
+
+        assert_eq!(trimesh, exp_trimesh);
         Ok(())
     }
 }

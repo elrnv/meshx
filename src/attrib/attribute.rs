@@ -4,7 +4,7 @@ use std::slice;
 
 use dync::{dync_mod, from_dyn, into_dyn, BoxValue, Slice, SliceMut, SmallValue, VecDyn};
 //use fnv::FnvHashSet as HashSet;
-use hashbrown::HashSet;
+use ahash::AHashSet as HashSet;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -506,7 +506,7 @@ impl DirectData {
     /// Construct a new attribute with the same buffer type and default element as `self`.
     ///
     /// The data within the newly created attribute is expected to be initialized with the given
-    /// function `init`, which takes the output `DataVec` for the new attribute and the existing
+    /// function `dup_data`, which produces a `VecDyn` for the new attribute given the existing
     /// `DataSlice` from `self`.
     pub fn duplicate_with(
         &self,
