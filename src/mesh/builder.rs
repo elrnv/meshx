@@ -2,6 +2,7 @@
  * This module provides convenience functions for building common meshes.
  */
 use super::{PolyMesh, TetMesh, TriMesh};
+use crate::Real;
 
 /// Axis plane orientation.
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -134,14 +135,16 @@ impl SolidBoxBuilder {
 pub struct PlatonicSolidBuilder {}
 
 impl PlatonicSolidBuilder {
-    pub fn build_octahedron() -> TriMesh<f64> {
+    pub fn build_octahedron<T: Real>() -> TriMesh<T> {
+        let h = T::from(0.5).unwrap();
+        let z = T::zero();
         let vertices = vec![
-            [-0.5, 0.0, 0.0],
-            [0.5, 0.0, 0.0],
-            [0.0, -0.5, 0.0],
-            [0.0, 0.5, 0.0],
-            [0.0, 0.0, -0.5],
-            [0.0, 0.0, 0.5],
+            [-h, z, z],
+            [h, z, z],
+            [z, -h, z],
+            [z, h, z],
+            [z, z, -h],
+            [z, z, h],
         ];
 
         #[rustfmt::skip]
@@ -159,15 +162,43 @@ impl PlatonicSolidBuilder {
         TriMesh::new(vertices, indices)
     }
 
-    pub fn build_tetrahedron() -> TetMesh<f64> {
-        let sqrt_8_by_9 = f64::sqrt(8.0 / 9.0);
-        let sqrt_2_by_9 = f64::sqrt(2.0 / 9.0);
-        let sqrt_2_by_3 = f64::sqrt(2.0 / 3.0);
+    pub fn build_cube<T: Real>() -> PolyMesh<T> {
+        #[rustfmt::skip]
+        let h = T::from(0.5).unwrap();
         let vertices = vec![
-            [0.0, 1.0, 0.0],
-            [-sqrt_8_by_9, -1.0 / 3.0, 0.0],
-            [sqrt_2_by_9, -1.0 / 3.0, sqrt_2_by_3],
-            [sqrt_2_by_9, -1.0 / 3.0, -sqrt_2_by_3],
+            [ h, -h,  h],
+            [-h, -h,  h],
+            [ h,  h,  h],
+            [-h,  h,  h],
+            [-h, -h, -h],
+            [ h, -h, -h],
+            [-h,  h, -h],
+            [ h,  h, -h]
+        ];
+
+        #[rustfmt::skip]
+        let indices = vec![
+            4, 0, 1, 3, 2,
+            4, 4, 5, 7, 6,
+            4, 6, 7, 2, 3,
+            4, 5, 4, 1, 0,
+            4, 5, 0, 2, 7,
+            4, 1, 4, 6, 3,
+        ];
+
+        PolyMesh::new(vertices, &indices)
+    }
+
+    pub fn build_tetrahedron<T: Real>() -> TetMesh<T> {
+        let sqrt_8_by_9 = T::from(f64::sqrt(8.0 / 9.0)).unwrap();
+        let sqrt_2_by_9 = T::from(f64::sqrt(2.0 / 9.0)).unwrap();
+        let sqrt_2_by_3 = T::from(f64::sqrt(2.0 / 3.0)).unwrap();
+        let third = T::from(1.0 / 3.0).unwrap();
+        let vertices = vec![
+            [T::zero(), T::one(), T::zero()],
+            [-sqrt_8_by_9, -third, T::zero()],
+            [sqrt_2_by_9, -third, sqrt_2_by_3],
+            [sqrt_2_by_9, -third, -sqrt_2_by_3],
         ];
 
         let indices = vec![[3, 1, 0, 2]];
@@ -175,29 +206,31 @@ impl PlatonicSolidBuilder {
         TetMesh::new(vertices, indices)
     }
 
-    pub fn build_icosahedron() -> TriMesh<f64> {
-        let sqrt5 = 5.0_f64.sqrt();
-        let a = 1.0 / sqrt5;
-        let w1 = 0.25 * (sqrt5 - 1.0);
-        let h1 = (0.125 * (5.0 + sqrt5)).sqrt();
-        let w2 = 0.25 * (sqrt5 + 1.0);
-        let h2 = (0.125 * (5.0 - sqrt5)).sqrt();
+    pub fn build_icosahedron<T: Real>() -> TriMesh<T> {
+        let sqrt5_f64 = 5.0_f64.sqrt();
+        let sqrt5 = T::from(sqrt5_f64).unwrap();
+        let a = T::one() / sqrt5;
+        let w1 = T::from(0.25 * (sqrt5_f64 - 1.0)).unwrap();
+        let h1 = T::from((0.125 * (5.0 + sqrt5_f64)).sqrt()).unwrap();
+        let w2 = T::from(0.25 * (sqrt5_f64 + 1.0)).unwrap();
+        let h2 = T::from((0.125 * (5.0 - sqrt5_f64)).sqrt()).unwrap();
+        let two = T::from(2.0).unwrap();
         let vertices = vec![
             // North pole
-            [0.0, 0.0, 1.0],
+            [T::zero(), T::zero(), T::one()],
             // Alternating ring
-            [0.0, 2.0 * a, a],
-            [2.0 * a * h2, 2.0 * a * w2, -a],
-            [2.0 * a * h1, 2.0 * a * w1, a],
-            [2.0 * a * h1, -2.0 * a * w1, -a],
-            [2.0 * a * h2, -2.0 * a * w2, a],
-            [0.0, -2.0 * a, -a],
-            [-2.0 * a * h2, -2.0 * a * w2, a],
-            [-2.0 * a * h1, -2.0 * a * w1, -a],
-            [-2.0 * a * h1, 2.0 * a * w1, a],
-            [-2.0 * a * h2, 2.0 * a * w2, -a],
+            [T::zero(), two * a, a],
+            [two * a * h2, two * a * w2, -a],
+            [two * a * h1, two * a * w1, a],
+            [two * a * h1, -two * a * w1, -a],
+            [two * a * h2, -two * a * w2, a],
+            [T::zero(), -two * a, -a],
+            [-two * a * h2, -two * a * w2, a],
+            [-two * a * h1, -two * a * w1, -a],
+            [-two * a * h1, two * a * w1, a],
+            [-two * a * h2, two * a * w2, -a],
             // South pole
-            [0.0, 0.0, -1.0],
+            [T::zero(), T::zero(), -T::one()],
         ];
 
         #[rustfmt::skip]
@@ -310,7 +343,7 @@ mod tests {
         use approx::assert_relative_eq;
         use math::Vector3;
 
-        let icosa = PlatonicSolidBuilder::build_icosahedron();
+        let icosa = PlatonicSolidBuilder::build_icosahedron::<f64>();
         for &v in icosa.vertex_positions() {
             assert_relative_eq!(Vector3::from(v).norm(), 1.0);
         }
