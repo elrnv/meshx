@@ -38,23 +38,23 @@ impl<T: Real> MeshExtractor<T> for ObjData {
 
         // We use a simple algorithm to determine if the uvs and normals have the same topology as
         // vertex positions.
-        let mut uv_vtx_indices = vec![None; obj_texture.len()];
-        let mut nml_vtx_indices = vec![None; obj_normal.len()];
+        let mut uv_topo_indices = vec![None; pts.len()];
+        let mut nml_topo_indices = vec![None; pts.len()];
 
         // Assume vertex topology until we fail to match to vertices.
         let mut uv_topo = TopologyType::Vertex;
         let mut nml_topo = TopologyType::Vertex;
 
         let update_topo =
-            |v_idx, topo_idx, topo: &mut TopologyType, vtx_indices: &mut [Option<usize>]| {
+            |v_idx, topo_idx, topo: &mut TopologyType, topo_indices: &mut [Option<usize>]| {
                 if matches!(*topo, TopologyType::Vertex) {
                     if let Some(topo_idx) = topo_idx {
-                        if let Some(vtx_idx) = vtx_indices[topo_idx] {
-                            if vtx_idx != v_idx {
+                        if let Some(t_idx) = topo_indices[v_idx] {
+                            if t_idx != topo_idx {
                                 *topo = TopologyType::FaceVertex;
                             }
                         } else {
-                            vtx_indices[topo_idx] = Some(v_idx);
+                            topo_indices[v_idx] = Some(topo_idx);
                         }
                     }
                 }
@@ -71,9 +71,9 @@ impl<T: Real> MeshExtractor<T> for ObjData {
                     for idx in &poly.0 {
                         let v_idx = idx.0;
                         faces.push(v_idx);
-                        update_topo(v_idx, idx.1, &mut uv_topo, &mut uv_vtx_indices);
+                        update_topo(v_idx, idx.1, &mut uv_topo, &mut uv_topo_indices);
                         uv_indices.push(idx.1);
-                        update_topo(v_idx, idx.2, &mut nml_topo, &mut nml_vtx_indices);
+                        update_topo(v_idx, idx.2, &mut nml_topo, &mut nml_topo_indices);
                         normal_indices.push(idx.2);
                     }
                 }
@@ -87,11 +87,11 @@ impl<T: Real> MeshExtractor<T> for ObjData {
 
         match uv_topo {
             TopologyType::Vertex => {
-                // Reorganize uvs to have the same order as vertices (this may be an identity mappin)
+                // Reorganize uvs to have the same order as vertices (this may be an identity mapping)
                 let mut vertex_uvs = vec![[0.0f32; 2]; polymesh.num_vertices()];
-                for (uv_idx, &uv) in obj_texture.iter().enumerate() {
-                    if let Some(vtx_idx) = uv_vtx_indices[uv_idx] {
-                        vertex_uvs[vtx_idx] = uv;
+                for (&uv_topo_idx, out_uv) in uv_topo_indices.iter().zip(vertex_uvs.iter_mut()) {
+                    if let Some(uv_topo_idx) = uv_topo_idx {
+                        *out_uv = obj_texture[uv_topo_idx];
                     }
                 }
                 polymesh.insert_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, vertex_uvs)?;
@@ -111,9 +111,9 @@ impl<T: Real> MeshExtractor<T> for ObjData {
             TopologyType::Vertex => {
                 // Reorganize uvs to have the same order as vertices (this may be an identity mappin)
                 let mut vertex_normals = vec![[0.0f32; 3]; polymesh.num_vertices()];
-                for (nml_idx, &nml) in obj_normal.iter().enumerate() {
-                    if let Some(vtx_idx) = nml_vtx_indices[nml_idx] {
-                        vertex_normals[vtx_idx] = nml;
+                for (&nml_topo_idx, out_nml) in nml_topo_indices.iter().zip(vertex_normals.iter_mut()) {
+                    if let Some(nml_topo_idx) = nml_topo_idx {
+                        *out_nml = obj_normal[nml_topo_idx];
                     }
                 }
                 polymesh
