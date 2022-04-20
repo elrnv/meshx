@@ -359,7 +359,7 @@ impl<T: Real> Mesh<T> {
     /// mesh attribute.
     ///
     /// To recover the original vertex order, you can invoke
-    /// [`sort_vertices_by_key`] using this attribute.
+    /// `sort_vertices_by_key` using this attribute.
     ///
     /// # Examples
     /// ```

@@ -173,7 +173,7 @@ where
     /// right size for the attribute to be set successfully.
     ///
     /// If an attribute with the same name already exists, it is overwritten. To
-    /// avoid overwriting existing attributes use [`Attrib::insert_attrib_from_vec`].
+    /// avoid overwriting existing attributes use [`Attrib::insert_attrib_data`].
     fn set_attrib_data<'a, T, I: AttribIndex<Self>>(
         &mut self,
         name: &'a str,
