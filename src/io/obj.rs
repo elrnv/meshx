@@ -85,50 +85,59 @@ impl<T: Real> MeshExtractor<T> for ObjData {
         // Get attributes:
         // Obj has 2D vertex uvs and vertex normals.
 
-        match uv_topo {
-            TopologyType::Vertex => {
-                // Reorganize uvs to have the same order as vertices (this may be an identity mapping)
-                let mut vertex_uvs = vec![[0.0f32; 2]; polymesh.num_vertices()];
-                for (&uv_topo_idx, out_uv) in uv_topo_indices.iter().zip(vertex_uvs.iter_mut()) {
-                    if let Some(uv_topo_idx) = uv_topo_idx {
-                        *out_uv = obj_texture[uv_topo_idx];
+        if uv_topo_indices.iter().any(Option::is_some) {
+            match uv_topo {
+                TopologyType::Vertex => {
+                    // Reorganize uvs to have the same order as vertices (this may be an identity mapping)
+                    let mut vertex_uvs = vec![[0.0f32; 2]; polymesh.num_vertices()];
+                    for (&uv_topo_idx, out_uv) in uv_topo_indices.iter().zip(vertex_uvs.iter_mut())
+                    {
+                        if let Some(uv_topo_idx) = uv_topo_idx {
+                            *out_uv = obj_texture[uv_topo_idx];
+                        }
                     }
+                    polymesh.insert_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, vertex_uvs)?;
                 }
-                polymesh.insert_attrib_data::<_, VertexIndex>(UV_ATTRIB_NAME, vertex_uvs)?;
-            }
-            TopologyType::FaceVertex => {
-                // We couldn't find a vertex correspondence, so write uvs to the face vertex topology.
-                let face_vertex_uvs: Vec<_> = uv_indices
-                    .iter()
-                    .map(|idx| idx.map(|idx| obj_texture[idx]).unwrap_or([0.0f32; 2]))
-                    .collect();
-                polymesh
-                    .insert_attrib_data::<_, FaceVertexIndex>(UV_ATTRIB_NAME, face_vertex_uvs)?;
+                TopologyType::FaceVertex => {
+                    // We couldn't find a vertex correspondence, so write uvs to the face vertex topology.
+                    let face_vertex_uvs: Vec<_> = uv_indices
+                        .iter()
+                        .map(|idx| idx.map(|idx| obj_texture[idx]).unwrap_or([0.0f32; 2]))
+                        .collect();
+                    polymesh.insert_attrib_data::<_, FaceVertexIndex>(
+                        UV_ATTRIB_NAME,
+                        face_vertex_uvs,
+                    )?;
+                }
             }
         }
 
-        match nml_topo {
-            TopologyType::Vertex => {
-                // Reorganize uvs to have the same order as vertices (this may be an identity mappin)
-                let mut vertex_normals = vec![[0.0f32; 3]; polymesh.num_vertices()];
-                for (&nml_topo_idx, out_nml) in nml_topo_indices.iter().zip(vertex_normals.iter_mut()) {
-                    if let Some(nml_topo_idx) = nml_topo_idx {
-                        *out_nml = obj_normal[nml_topo_idx];
+        if nml_topo_indices.iter().any(Option::is_some) {
+            match nml_topo {
+                TopologyType::Vertex => {
+                    // Reorganize uvs to have the same order as vertices (this may be an identity mappin)
+                    let mut vertex_normals = vec![[0.0f32; 3]; polymesh.num_vertices()];
+                    for (&nml_topo_idx, out_nml) in
+                        nml_topo_indices.iter().zip(vertex_normals.iter_mut())
+                    {
+                        if let Some(nml_topo_idx) = nml_topo_idx {
+                            *out_nml = obj_normal[nml_topo_idx];
+                        }
                     }
+                    polymesh
+                        .insert_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, vertex_normals)?;
                 }
-                polymesh
-                    .insert_attrib_data::<_, VertexIndex>(NORMAL_ATTRIB_NAME, vertex_normals)?;
-            }
-            TopologyType::FaceVertex => {
-                // We couldn't find a vertex correspondence, so write normals to the face vertex topology.
-                let face_vertex_normals: Vec<_> = normal_indices
-                    .iter()
-                    .map(|idx| idx.map(|idx| obj_normal[idx]).unwrap_or([0.0f32; 3]))
-                    .collect();
-                polymesh.insert_attrib_data::<_, FaceVertexIndex>(
-                    NORMAL_ATTRIB_NAME,
-                    face_vertex_normals,
-                )?;
+                TopologyType::FaceVertex => {
+                    // We couldn't find a vertex correspondence, so write normals to the face vertex topology.
+                    let face_vertex_normals: Vec<_> = normal_indices
+                        .iter()
+                        .map(|idx| idx.map(|idx| obj_normal[idx]).unwrap_or([0.0f32; 3]))
+                        .collect();
+                    polymesh.insert_attrib_data::<_, FaceVertexIndex>(
+                        NORMAL_ATTRIB_NAME,
+                        face_vertex_normals,
+                    )?;
+                }
             }
         }
 
