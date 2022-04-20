@@ -600,17 +600,17 @@ impl PlatonicSolidBuilder {
     /// All vertices on the cube have norm approximately equal to `1.0`.
     /// To create a cube with exact vertex positions, use `BoxBuilder`.
     pub fn build_cube<T: Real>(self) -> PolyMesh<T> {
-        #[rustfmt::skip]
         let h = T::from(self.radius / num_traits::Float::sqrt(3.0)).unwrap();
+        #[rustfmt::skip]
         let vertices = vec![
-            [h, -h, h],
-            [-h, -h, h],
-            [h, h, h],
-            [-h, h, h],
+            [ h, -h,  h],
+            [-h, -h,  h],
+            [ h,  h,  h],
+            [-h,  h,  h],
             [-h, -h, -h],
-            [h, -h, -h],
-            [-h, h, -h],
-            [h, h, -h],
+            [ h, -h, -h],
+            [-h,  h, -h],
+            [ h,  h, -h],
         ];
 
         #[rustfmt::skip]
