@@ -359,7 +359,7 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
 
                     // Don't bother transferring attributes if there are no vertices or cells.
                     // This supresses some needless size mismatch warnings when the dataset has an
-                    // unstructuredgrid representing something other than a recognizable Mesh.
+                    // unstructured grid representing something other than a recognizable Mesh.
 
                     if mesh.num_vertices() > 0 {
                         // Populate point attributes.
@@ -424,12 +424,14 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                         let n = end - begin;
 
                         // Skip geometry we can't represent as a polygon mesh.
-                        if (types[c] == model::CellType::Line && n != 1
-                            || types[c] == model::CellType::Triangle && n != 3)
-                            || (types[c] == model::CellType::Quad && n != 4)
-                            || (types[c] != model::CellType::Polygon
-                                && types[c] != model::CellType::PolyLine)
-                        {
+                        let skip = match types[c] {
+                            model::CellType::Line => n != 1,
+                            model::CellType::Triangle => n != 3,
+                            model::CellType::Quad => n != 4,
+                            model::CellType::Polygon | model::CellType::PolyLine => false,
+                            _ => true,
+                        };
+                        if skip {
                             count_non_polymesh_faces += 1;
                             begin = end;
                             continue;
