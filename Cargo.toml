@@ -1,6 +1,6 @@
 [package]
 name = "meshx"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["Egor Larionov <egor.larionov@gmail.com>"]
 description = "A mesh eXchange library with conversion utilities for popular mesh formats."
 edition = "2018"
