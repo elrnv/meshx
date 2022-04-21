@@ -269,7 +269,7 @@ fn save_polymesh_ascii_impl<T: Real>(polymesh: &PolyMesh<T>, file: &Path) -> Res
 
 /// Loads a triangle mesh from a given file.
 pub fn load_trimesh<T: Real, P: AsRef<Path>>(file: P) -> Result<TriMesh<T>, Error> {
-    load_polymesh_impl(file.as_ref()).map(|m| TriMesh::from(m))
+    load_polymesh_impl(file.as_ref()).map(TriMesh::from)
 }
 
 /// Saves a triangle mesh to a file.

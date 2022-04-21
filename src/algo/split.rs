@@ -690,7 +690,7 @@ impl<T: Real> TetMesh<T> {
                     orig_vertex_indices.iter().cloned(),
                     &mut new_attribute_value_cache,
                 );
-                let tetmesh = TetMesh {
+                TetMesh {
                     vertex_positions: IntrinsicAttribute::from_vec(new_vertex_positions),
                     indices: IntrinsicAttribute::from_vec(new_indices),
                     vertex_attributes: new_vertex_attributes,
@@ -698,8 +698,7 @@ impl<T: Real> TetMesh<T> {
                     cell_vertex_attributes: new_cell_vertex_attributes,
                     cell_face_attributes: new_cell_face_attributes,
                     attribute_value_cache: new_attribute_value_cache,
-                };
-                tetmesh
+                }
             },
         )
         .collect::<Vec<_>>();
@@ -720,7 +719,7 @@ impl<T: Real> TetMesh<T> {
         if num_parts == 1 {
             return (
                 vec![self],
-                (0..num_cells).map(|x| Index::new(x)).collect::<Vec<_>>(),
+                (0..num_cells).map(Index::new).collect::<Vec<_>>(),
             );
         }
 

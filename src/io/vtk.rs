@@ -338,13 +338,11 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                             // Start a new block.
                             cell_types.push(cell_type);
                             counts.push(1);
+                        } else if let Some(last) = counts.last_mut() {
+                            *last += 1;
                         } else {
-                            if let Some(last) = counts.last_mut() {
-                                *last += 1;
-                            } else {
-                                // Bug in the code. Counts must have the same size as cell_types.
-                                return None;
-                            }
+                            // Bug in the code. Counts must have the same size as cell_types.
+                            return None;
                         }
 
                         orig_cell_idx.push(c);

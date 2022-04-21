@@ -265,8 +265,7 @@ impl<T: Real> Mesh<T> {
             .enumerate()
             .scan((0, 0), |(prev_off, prev_chunk_off), (i, &chunk_off)| {
                 Some(if i > 0 {
-                    *prev_off =
-                        *prev_off + (chunk_off - *prev_chunk_off) * types[i - 1].num_verts();
+                    *prev_off += (chunk_off - *prev_chunk_off) * types[i - 1].num_verts();
                     *prev_chunk_off = chunk_off;
                     *prev_off
                 } else {
@@ -458,7 +457,7 @@ impl<T: Real> Mesh<T> {
                         .zip(chunk_offsets.sizes())
                         .flat_map(|(&ty, n)| std::iter::repeat(ty).take(n)),
                 )
-                .filter(move |(cell, cell_type)| predicate(&*cell, *cell_type))
+                .filter(move |(cell, cell_type)| predicate(*cell, *cell_type))
                 .map(|(cell, _)| cell)
         }
 

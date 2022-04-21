@@ -125,7 +125,7 @@ impl BoxBuilder {
 
     /// Sets the number of divisions on the box.
     pub fn with_divisions(self, divisions: [u32; 3]) -> Self {
-        Self { divisions, ..self }
+        Self { divisions }
     }
 
     /// Builds a tetmesh box.

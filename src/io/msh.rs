@@ -36,7 +36,7 @@ impl<T: Real + std::str::FromStr> MeshExtractor<T> for MshFile<u64, i32, f64> {
     /// This function will clone the given model as necessary.
     fn extract_mesh(&self) -> Result<Mesh<T>, Error> {
         let MshFile { data, .. } = &self;
-        let nodes = data.nodes.as_ref().ok_or_else(|| Error::MissingMeshData)?;
+        let nodes = data.nodes.as_ref().ok_or(Error::MissingMeshData)?;
 
         // Output vertices.
         let mut vertices = Vec::new();
@@ -80,10 +80,7 @@ impl<T: Real + std::str::FromStr> MeshExtractor<T> for MshFile<u64, i32, f64> {
             None
         };
 
-        let elements = data
-            .elements
-            .as_ref()
-            .ok_or_else(|| Error::MissingMeshData)?;
+        let elements = data.elements.as_ref().ok_or(Error::MissingMeshData)?;
         let mut indices = Vec::new();
         let mut cell_types = Vec::new();
         let mut counts = Vec::new();
