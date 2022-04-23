@@ -131,7 +131,7 @@ impl BoxBuilder {
     /// Builds a tetmesh box.
     ///
     /// The tetrahedralization is a simple 6 tets per cube with a regular pattern.
-    fn build_tetmesh<T: Real>(self) -> TetMesh<T> {
+    pub fn build_tetmesh<T: Real>(self) -> TetMesh<T> {
         let mut positions = Vec::new();
         let [dx, dy, dz] = self.divisions;
         let nx = dx as usize + 1;
