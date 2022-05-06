@@ -445,23 +445,26 @@ impl<T: Real> Mesh<T> {
             types: &'a [CellType],
             chunk_offsets: &'a Offsets,
             predicate: &'a F,
-        ) -> impl Iterator<Item = &'a mut [usize]> + 'a
+        ) -> impl Iterator<Item = (&'a mut [usize], usize)> + 'a
         where
             F: Fn(&[usize], CellType) -> bool + 'a,
         {
+            let (chunks, data) = indices.into_inner();
+            let indices = Chunked { chunks, data };
             indices
                 .into_iter()
+                .zip(chunks.into_values())
                 .zip(
                     types
                         .iter()
                         .zip(chunk_offsets.sizes())
                         .flat_map(|(&ty, n)| std::iter::repeat(ty).take(n)),
                 )
-                .filter(move |(cell, cell_type)| predicate(*cell, *cell_type))
-                .map(|(cell, _)| cell)
+                .filter(move |((cell, _), cell_type)| predicate(*cell, *cell_type))
+                .map(|((cell, offset), _)| (cell, offset))
         }
 
-        for cell in cell_iter(
+        for (cell, _) in cell_iter(
             indices.view_mut(),
             types.as_mut_slice(),
             &chunk_offsets,
@@ -474,10 +477,10 @@ impl<T: Real> Mesh<T> {
 
         // Since each vertex has an associated cell vertex attribute, we must remap those
         // as well.
-        // Reverse cell vertex attributes
+        // Reverse cell vertex attributes.
         for (_, attrib) in cell_vertex_attributes.iter_mut() {
             let mut data_slice = attrib.data_mut_slice();
-            for cell in cell_iter(
+            for (cell, offset) in cell_iter(
                 indices.view_mut(),
                 types.as_mut_slice(),
                 &chunk_offsets,
@@ -486,7 +489,7 @@ impl<T: Real> Mesh<T> {
                 let mut i = 0usize;
                 let num_verts = cell.len();
                 while i < num_verts / 2 {
-                    data_slice.swap(cell[i], cell[num_verts - i - 1]);
+                    data_slice.swap(offset + i, offset + num_verts - i - 1);
                     i += 1;
                 }
             }
@@ -773,12 +776,40 @@ mod tests {
     #[test]
     fn reverse_only_triangles() {
         let mut mesh = build_simple_mesh();
+        let cv = vec![1.0_f32, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
+        let cv_reversed = vec![3.0_f32, 2.0, 1.0, 6.0, 5.0, 4.0, 7.0, 8.0, 9.0, 10.0];
+        mesh.insert_attrib_data::<f32, CellVertexIndex>("cv", cv.clone())
+            .unwrap();
+        mesh.reverse_if(|_, cell_type| matches!(cell_type, CellType::Triangle));
+        {
+            let mut cell_iter = mesh.cell_iter();
+            assert_eq!(cell_iter.next(), Some(&[2, 1, 0][..]));
+            assert_eq!(cell_iter.next(), Some(&[2, 3, 1][..]));
+            assert_eq!(cell_iter.next(), Some(&[0, 1, 5, 4][..]));
+            assert_eq!(cell_iter.next(), None);
+            for (actual, expected) in mesh
+                .direct_attrib_iter::<f32, CellVertexIndex>("cv")
+                .unwrap()
+                .zip(cv_reversed.iter())
+            {
+                assert_eq!(actual, expected);
+            }
+        }
+
+        // Reverse back
         mesh.reverse_if(|_, cell_type| matches!(cell_type, CellType::Triangle));
         let mut cell_iter = mesh.cell_iter();
-        assert_eq!(cell_iter.next(), Some(&[2, 1, 0][..]));
-        assert_eq!(cell_iter.next(), Some(&[2, 3, 1][..]));
+        assert_eq!(cell_iter.next(), Some(&[0, 1, 2][..]));
+        assert_eq!(cell_iter.next(), Some(&[1, 3, 2][..]));
         assert_eq!(cell_iter.next(), Some(&[0, 1, 5, 4][..]));
         assert_eq!(cell_iter.next(), None);
+        for (actual, expected) in mesh
+            .direct_attrib_iter::<f32, CellVertexIndex>("cv")
+            .unwrap()
+            .zip(cv.iter())
+        {
+            assert_eq!(actual, expected);
+        }
     }
 
     fn sample_points() -> Vec<[f64; 3]> {
