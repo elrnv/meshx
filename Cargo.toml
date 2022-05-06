@@ -28,7 +28,7 @@ mshio = { version = "0.4", optional = true }
 rand = "0.8"
 approx = "0.5"
 criterion = { version = "0.3" }
-autodiff = { version = "0.4", features = ["na"] }
+autodiff = { version = "0.5", features = ["na"] }
 ron = "0.7"
 
 [features]
