@@ -2211,4 +2211,41 @@ mod tests {
             &[3, 4, 5, 6, 7, 8, 9, 10, 11, 12][..]
         );
     }
+
+    #[test]
+    fn split_into_typed_meshes() {
+        // A simple test for splitting typed meshes with only triangles.
+        // This test ensures that attributes are also split correctly.
+        // A more complex test is available in doc tests.
+        let points = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+        ];
+        let cells = vec![
+            0, 1, 2, // first triangle
+            1, 3, 2,
+        ]; // second triangle
+        let counts = vec![2];
+        let types = vec![CellType::Triangle];
+
+        let mut mesh = Mesh::from_cells_counts_and_types(points.clone(), cells, counts, types);
+
+        let vel = vec![[0.0_f32; 3]; 4];
+        mesh.insert_attrib_data::<[f32; 3], VertexIndex>("vel", vel.clone())
+            .unwrap();
+
+        let meshes = mesh.split_into_typed_meshes();
+
+        if let TypedMesh::Tri(mesh) = &meshes[0] {
+            assert_eq!(mesh.indices.as_slice(), &[[0, 1, 2], [1, 3, 2]][..]);
+            assert_eq!(mesh.vertex_positions.as_slice(), points[0..4].to_vec());
+            assert_eq!(
+                mesh.attrib_as_slice::<[f32; 3], VertexIndex>("vel")
+                    .unwrap(),
+                vel.as_slice()
+            );
+        }
+    }
 }
