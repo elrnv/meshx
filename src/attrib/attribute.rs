@@ -1115,6 +1115,17 @@ impl<I> Attribute<I> {
         }
     }
 
+    /// Construct a new attribute with the same data and default element as
+    /// `self`, but corresponding to a different topology.
+    ///
+    /// This function consumes the given attribute.
+    pub fn promote_into<J>(self) -> Attribute<J> {
+        Attribute {
+            data: self.data,
+            phantom: PhantomData,
+        }
+    }
+
     /// Construct a new attribute with the same buffer type and default element as `self`.
     #[inline]
     pub fn promote_with<J>(

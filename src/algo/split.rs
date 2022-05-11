@@ -516,12 +516,12 @@ impl<T: Real> Mesh<T> {
 
                     let mut face_attributes = AttribDict::new();
                     for (name, cell_attrib) in new_cell_attributes.into_iter() {
-                        face_attributes.insert(name, cell_attrib.promote::<FaceIndex>());
+                        face_attributes.insert(name, cell_attrib.promote_into::<FaceIndex>());
                     }
                     let mut face_vertex_attributes = AttribDict::new();
                     for (name, cell_vertex_attrib) in new_cell_vertex_attributes.into_iter() {
                         face_vertex_attributes
-                            .insert(name, cell_vertex_attrib.promote::<FaceVertexIndex>());
+                            .insert(name, cell_vertex_attrib.promote_into::<FaceVertexIndex>());
                     }
 
                     let trimesh = TriMesh {
