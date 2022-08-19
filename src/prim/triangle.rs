@@ -153,11 +153,11 @@ where
 
 impl<'a, T> Normal<[T; 3]> for &'a Triangle<T>
 where
-    T: Scalar + ClosedAdd<T> + ClosedDiv<T> + num_traits::FromPrimitive,
+    T: math::SimdRealField,
 {
     #[inline]
     fn normal(self) -> [T; 3] {
-        <Self as Centroid<Vector3<T>>>::centroid(self).into()
+        <Self as Normal<Vector3<T>>>::normal(self).into()
     }
 }
 
@@ -321,6 +321,34 @@ mod tests {
                 }
                 tri[wrt_vtx][i] = F1::cst(tri[wrt_vtx][i]); // convert to constant
             }
+        }
+    }
+
+    #[test]
+    fn centroid_and_normal() {
+        let tri = Triangle(
+            Vector3::from([0.0, 0.0, 0.0]),
+            Vector3::from([1.0, 0.0, 0.0]),
+            Vector3::from([0.0, 1.0, 0.0]),
+        );
+
+        let c_exp = [1.0/3.0, 1.0/3.0, 0.0];
+        let n_exp = [0.0, 0.0, 1.0];
+
+        let c: [f32; 3] = tri.centroid();
+        let n: [f32; 3] = tri.normal();
+
+        for i in 0..3 {
+            assert_relative_eq!(c[i], c_exp[i], max_relative = 1e-9);
+            assert_relative_eq!(n[i], n_exp[i], max_relative = 1e-9);
+        }
+
+        let c: Vector3<f32> = tri.centroid();
+        let n: Vector3<f32> = tri.normal();
+
+        for i in 0..3 {
+            assert_relative_eq!(c[i], c_exp[i], max_relative = 1e-9);
+            assert_relative_eq!(n[i], n_exp[i], max_relative = 1e-9);
         }
     }
 }
