@@ -332,7 +332,7 @@ mod tests {
             Vector3::from([0.0, 1.0, 0.0]),
         );
 
-        let c_exp = [1.0/3.0, 1.0/3.0, 0.0];
+        let c_exp = [1.0 / 3.0, 1.0 / 3.0, 0.0];
         let n_exp = [0.0, 0.0, 1.0];
 
         let c: [f32; 3] = tri.centroid();
