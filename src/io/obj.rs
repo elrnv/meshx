@@ -1,17 +1,209 @@
-use objio::{self, Group, IndexTuple, Object, SimplePolygon};
+use std::collections::HashMap;
+
+use objio::{self, Group, IndexTuple, Mtl, Object, SimplePolygon};
 
 use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::{PointCloud, PolyMesh, VertexPositions};
 use crate::Real;
 
-use super::MeshExtractor;
+use super::{MeshExtractor, GROUP_ATTRIB_NAME, MTL_ATTRIB_NAME, OBJECT_ATTRIB_NAME};
 use super::{NORMAL_ATTRIB_NAME, UV_ATTRIB_NAME};
 
 pub use objio::ObjError;
 pub use objio::{LoadConfig, Obj, ObjData, ObjMaterial};
+pub use ordered_float::NotNan;
 
 pub use super::Error;
+
+#[allow(non_camel_case_types)]
+type f32h = NotNan<f32>;
+
+/// The model of a single Material as defined in the wavefront .mtl spec.
+///
+/// This is identical to the original `obj::Material` type with the exception that it implements `Eq` and `Hash` with the help of `ordered_float`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct Material {
+    pub name: String,
+
+    // Material color and illumination
+    pub ka: Option<[f32h; 3]>,
+    pub kd: Option<[f32h; 3]>,
+    pub ks: Option<[f32h; 3]>,
+    pub ke: Option<[f32h; 3]>,
+    pub km: Option<f32h>,
+    pub tf: Option<[f32h; 3]>,
+    pub ns: Option<f32h>,
+    pub ni: Option<f32h>,
+    pub tr: Option<f32h>,
+    pub d: Option<f32h>,
+    pub illum: Option<i32>,
+
+    // Texture and reflection maps
+    pub map_ka: Option<String>,
+    pub map_kd: Option<String>,
+    pub map_ks: Option<String>,
+    pub map_ke: Option<String>,
+    pub map_ns: Option<String>,
+    pub map_d: Option<String>,
+    pub map_bump: Option<String>,
+    pub map_refl: Option<String>,
+}
+
+// Display the material as if defined in the .mtl format, which should be familiar to most users.
+impl std::fmt::Display for Material {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Reference:
+        // newmtl spot
+        // Ns 250.000000
+        // Ka 1.000000 1.000000 1.000000
+        // Ks 0.500000 0.500000 0.500000
+        // Ke 0.000000 0.000000 0.000000
+        // Ni 1.450000
+        // d 1.000000
+        // illum 2
+        // map_Kd spot_texture.png
+
+        writeln!(f, "newmtl {}", self.name)?;
+        if let Some([a, b, c]) = self.ka {
+            writeln!(f, "Ka {a} {b} {c}")?;
+        }
+        if let Some([a, b, c]) = self.kd {
+            writeln!(f, "Kd {a} {b} {c}")?;
+        }
+        if let Some([a, b, c]) = self.ks {
+            writeln!(f, "Ks {a} {b} {c}")?;
+        }
+        if let Some([a, b, c]) = self.ke {
+            writeln!(f, "Ke {a} {b} {c}")?;
+        }
+        if let Some(km) = self.km {
+            writeln!(f, "Km {km}")?;
+        }
+        if let Some([a, b, c]) = self.tf {
+            writeln!(f, "Km {a} {b} {c}")?;
+        }
+        if let Some(x) = self.ns {
+            writeln!(f, "Ns {x}")?;
+        }
+        if let Some(x) = self.ni {
+            writeln!(f, "Ni {x}")?;
+        }
+        if let Some(x) = self.tr {
+            writeln!(f, "Tr {x}")?;
+        }
+        if let Some(x) = self.d {
+            writeln!(f, "d {x}")?;
+        }
+        if let Some(x) = self.illum {
+            writeln!(f, "illum {x}")?;
+        }
+        if let Some(x) = self.map_ka.as_ref() {
+            writeln!(f, "map_Ka {x}")?;
+        }
+        if let Some(x) = self.map_kd.as_ref() {
+            writeln!(f, "map_Kd {x}")?;
+        }
+        if let Some(x) = self.map_ks.as_ref() {
+            writeln!(f, "map_Ks {x}")?;
+        }
+        if let Some(x) = self.map_ke.as_ref() {
+            writeln!(f, "map_Ke {x}")?;
+        }
+        if let Some(x) = self.map_ns.as_ref() {
+            writeln!(f, "map_Ns {x}")?;
+        }
+        if let Some(x) = self.map_d.as_ref() {
+            writeln!(f, "map_d {x}")?;
+        }
+        if let Some(x) = self.map_bump.as_ref() {
+            writeln!(f, "map_bump {x}")?;
+        }
+        if let Some(x) = self.map_refl.as_ref() {
+            writeln!(f, "map_refl {x}")?;
+        }
+        Ok(())
+    }
+}
+
+fn new_option_f32h3(orig: Option<[f32; 3]>) -> Option<[f32h; 3]> {
+    orig.and_then(|[a, b, c]| {
+        if let Ok(a) = NotNan::new(a) {
+            if let Ok(b) = NotNan::new(b) {
+                if let Ok(c) = NotNan::new(c) {
+                    return Some([a, b, c]);
+                }
+            }
+        }
+        return None;
+    })
+}
+
+fn new_option_f32_3(orig: Option<[f32h; 3]>) -> Option<[f32; 3]> {
+    orig.map(|[a, b, c]| [a.into(), b.into(), c.into()])
+}
+
+fn new_option_f32h(orig: Option<f32>) -> Option<f32h> {
+    orig.and_then(|a| NotNan::new(a).ok())
+}
+
+fn new_option_f32(orig: Option<f32h>) -> Option<f32> {
+    orig.map(|a| a.into())
+}
+
+impl From<objio::Material> for Material {
+    fn from(v: objio::Material) -> Self {
+        Material {
+            name: v.name,
+            ka: new_option_f32h3(v.ka),
+            kd: new_option_f32h3(v.kd),
+            ks: new_option_f32h3(v.ks),
+            ke: new_option_f32h3(v.ke),
+            km: new_option_f32h(v.km),
+            tf: new_option_f32h3(v.tf),
+            ns: new_option_f32h(v.ns),
+            ni: new_option_f32h(v.ni),
+            tr: new_option_f32h(v.tr),
+            d: new_option_f32h(v.d),
+            illum: v.illum,
+            map_ka: v.map_ka,
+            map_kd: v.map_kd,
+            map_ks: v.map_ks,
+            map_ke: v.map_ke,
+            map_ns: v.map_ns,
+            map_d: v.map_d,
+            map_bump: v.map_bump,
+            map_refl: v.map_refl,
+        }
+    }
+}
+
+impl From<Material> for objio::Material {
+    fn from(v: Material) -> Self {
+        objio::Material {
+            name: v.name,
+            ka: new_option_f32_3(v.ka),
+            kd: new_option_f32_3(v.kd),
+            ks: new_option_f32_3(v.ks),
+            ke: new_option_f32_3(v.ke),
+            km: new_option_f32(v.km),
+            tf: new_option_f32_3(v.tf),
+            ns: new_option_f32(v.ns),
+            ni: new_option_f32(v.ni),
+            tr: new_option_f32(v.tr),
+            d: new_option_f32(v.d),
+            illum: v.illum,
+            map_ka: v.map_ka,
+            map_kd: v.map_kd,
+            map_ks: v.map_ks,
+            map_ke: v.map_ke,
+            map_ns: v.map_ns,
+            map_d: v.map_d,
+            map_bump: v.map_bump,
+            map_refl: v.map_refl,
+        }
+    }
+}
 
 enum TopologyType {
     Vertex,
@@ -141,29 +333,37 @@ impl<T: Real> MeshExtractor<T> for ObjData {
             }
         }
 
-        // Add names
+        // Add object and group names and materials
         let num_polys = polymesh.num_faces();
         let cache = &mut polymesh.attribute_value_cache;
         let mut object_names = IndirectData::with_size(num_polys, "default".to_string());
         let mut group_names = IndirectData::with_size(num_polys, "default".to_string());
-        let mut mtl_names = None;
+        let mut mtls = None;
 
         let mut poly_count = 0;
         for object in &self.objects {
             let object_name = HValue::new(Irc::new(object.name.clone()));
             for group in &object.groups {
                 let group_name = HValue::new(Irc::new(group.name.clone()));
-                let mtl_name = group
+                let mtl = group
                     .material
                     .as_ref()
-                    .map(|mat| match mat {
-                        ObjMaterial::Ref(s) => s.clone(),
-                        ObjMaterial::Mtl(s) => s.name.clone(),
+                    .map(|mat| {
+                        Material::from(match mat {
+                            ObjMaterial::Ref(s) => objio::Material::new(s.clone()),
+                            ObjMaterial::Mtl(s) => (**s).clone(),
+                        })
                     })
                     .map(|m| HValue::new(Irc::new(m)));
-                if mtl_name.is_some() && mtl_names.is_none() {
-                    // Initialize material names
-                    mtl_names = Some(IndirectData::with_size(num_polys, "default".to_string()));
+                if mtl.is_some() && mtls.is_none() {
+                    // Initialize materials
+                    mtls = Some(IndirectData::with_size(
+                        num_polys,
+                        Material {
+                            name: "default".into(),
+                            ..Material::default()
+                        },
+                    ));
                 }
                 for _ in &group.polys {
                     object_names
@@ -172,9 +372,9 @@ impl<T: Real> MeshExtractor<T> for ObjData {
                     group_names
                         .set_value_at(poly_count, &group_name, cache)
                         .unwrap();
-                    if let Some(mtl) = mtl_name.as_ref() {
-                        if let Some(names) = mtl_names.as_mut() {
-                            names.set_value_at(poly_count, mtl, cache).unwrap();
+                    if let Some(mtl) = mtl.as_ref() {
+                        if let Some(mtls) = mtls.as_mut() {
+                            mtls.set_value_at(poly_count, mtl, cache).unwrap();
                         }
                     }
                     poly_count += 1;
@@ -182,10 +382,10 @@ impl<T: Real> MeshExtractor<T> for ObjData {
             }
         }
 
-        polymesh.insert_indirect_attrib_data::<FaceIndex>("object", object_names)?;
-        polymesh.insert_indirect_attrib_data::<FaceIndex>("group", group_names)?;
-        if let Some(mtl_names) = mtl_names {
-            polymesh.insert_indirect_attrib_data::<FaceIndex>("mtl", mtl_names)?;
+        polymesh.insert_indirect_attrib_data::<FaceIndex>(OBJECT_ATTRIB_NAME, object_names)?;
+        polymesh.insert_indirect_attrib_data::<FaceIndex>(GROUP_ATTRIB_NAME, group_names)?;
+        if let Some(mtls) = mtls {
+            polymesh.insert_indirect_attrib_data::<FaceIndex>(MTL_ATTRIB_NAME, mtls)?;
         }
 
         Ok(polymesh)
@@ -308,65 +508,92 @@ pub fn convert_polymesh_to_obj_format<T: Real>(mesh: &PolyMesh<T>) -> Result<Obj
         None
     };
 
-    let polys: Vec<SimplePolygon> = mesh
-        .face_iter()
-        .enumerate()
-        .map(|(face_idx, face)| {
-            SimplePolygon(
-                face.iter()
-                    .enumerate()
-                    .map(|(i, &v)| {
-                        let fv_idx = || face.len() * face_idx + i;
-                        let uv = uvs.as_ref().map(|(_, topo_type)| match topo_type {
-                            TopologyType::Vertex => v,
-                            TopologyType::FaceVertex => fv_idx(),
-                        });
-                        let nv = normals.as_ref().map(|(_, topo_type)| match topo_type {
-                            TopologyType::Vertex => v,
-                            TopologyType::FaceVertex => fv_idx(),
-                        });
-                        IndexTuple(v, uv, nv)
-                    })
-                    .collect::<Vec<_>>(),
-            )
-        })
-        .collect();
+    // A generic name allows this obj to be saved easily.
+    let mut material_lib = Mtl::new("material.mtl".to_string());
 
-    let find_mode_for_string_face_attrib = |attrib_name, def| {
-        if let Ok(str_attrib) = mesh.attrib::<FaceIndex>(attrib_name) {
-            let mut mode = Irc::new(def);
-            let mut max_count = 1;
-            if let AttributeData::Indirect(indirect_data) = &str_attrib.data {
-                if let Ok(rc_iter) = indirect_data.as_rc_slice::<String>() {
-                    for str_rc in rc_iter.iter() {
-                        let cur_count = Irc::strong_count(str_rc);
-                        if cur_count > max_count {
-                            max_count = cur_count;
-                            mode = Irc::clone(str_rc);
-                        }
-                    }
-                }
-            }
-            (&*mode).clone()
-        } else {
-            def
+    // Object hierarchy.
+    // Each object contains a set of groups, each group contains polygons. Each polygon can reference a unique material, which is collected into a material library.
+    let mut objects = HashMap::new();
+    let def_str = "default".to_string();
+
+    // Iterator over materials (each wrapped with some) or an iterator over none, if there is no material attribute.
+    let mtls = mesh
+        .attrib_iter::<Material, FaceIndex>(MTL_ATTRIB_NAME)
+        .map(|iter| iter.map(|mtl| Some(mtl)))
+        .into_iter()
+        .flatten()
+        .chain(std::iter::repeat(None));
+    let object_names = mesh
+        .attrib::<FaceIndex>(OBJECT_ATTRIB_NAME)
+        .unwrap() // No panic: Polymeshes have attribute value caches.
+        .indirect_iter::<String>()
+        .ok()
+        .into_iter()
+        .flatten()
+        .chain(std::iter::repeat(&def_str));
+    let group_names = mesh
+        .attrib::<FaceIndex>(GROUP_ATTRIB_NAME)
+        .unwrap() // No panic: Polymeshes have attribute value caches.
+        .indirect_iter::<String>()
+        .ok()
+        .into_iter()
+        .flatten()
+        .chain(std::iter::repeat(&def_str));
+
+    for (face_idx, (face, ((object_name, group_name), mtl))) in mesh
+        .face_iter()
+        .zip(object_names.zip(group_names).zip(mtls))
+        .enumerate()
+    {
+        let object = objects.entry(object_name).or_insert(HashMap::new());
+        let mut group = object.entry(group_name).or_insert(Group {
+            name: group_name.to_string(),
+            index: 0,
+            material: None,
+            polys: Vec::new(),
+        });
+        if group.material.is_none() {
+            group.material = mtl.to_owned().map(|mtl| {
+                let arc_mtl = std::sync::Arc::new(mtl.clone().into());
+                material_lib.materials.push(std::sync::Arc::clone(&arc_mtl));
+                ObjMaterial::Mtl(arc_mtl)
+            })
         }
-    };
+        group.polys.push(SimplePolygon(
+            face.iter()
+                .enumerate()
+                .map(|(i, &v)| {
+                    let fv_idx = || face.len() * face_idx + i;
+                    let uv = uvs.as_ref().map(|(_, topo_type)| match topo_type {
+                        TopologyType::Vertex => v,
+                        TopologyType::FaceVertex => fv_idx(),
+                    });
+                    let nv = normals.as_ref().map(|(_, topo_type)| match topo_type {
+                        TopologyType::Vertex => v,
+                        TopologyType::FaceVertex => fv_idx(),
+                    });
+                    IndexTuple(v, uv, nv)
+                })
+                .collect::<Vec<_>>(),
+        ));
+    }
 
     Ok(ObjData {
         position,
         texture: uvs.map(|(v, _)| v).unwrap_or_else(Vec::new),
         normal: normals.map(|(v, _)| v).unwrap_or_else(Vec::new),
-        objects: vec![Object {
-            name: find_mode_for_string_face_attrib("object", "default".to_string()),
-            groups: vec![Group {
-                name: find_mode_for_string_face_attrib("group", "default".to_string()),
-                index: 0,
-                material: None,
-                polys,
-            }],
-        }],
-        material_libs: Vec::new(),
+        objects: objects
+            .into_iter()
+            .map(|(name, obj)| Object {
+                name: name.to_string(),
+                groups: obj.into_values().collect::<Vec<_>>(),
+            })
+            .collect::<Vec<_>>(),
+        material_libs: if material_lib.materials.is_empty() {
+            Vec::new()
+        } else {
+            vec![material_lib]
+        },
     })
 }
 
@@ -646,5 +873,36 @@ mod tests {
         assert_eq!(converted_ptcloud.clone(), ptcloud);
         let converted_obj_2 = convert_pointcloud_to_obj_format(&converted_ptcloud).unwrap();
         assert_eq!(converted_obj_2, converted_obj);
+    }
+
+    #[test]
+    fn roundtrip_obj_with_mtl_and_texture_test() {
+        let mut obj_spot = Obj::load("./assets/spot.obj").unwrap();
+        obj_spot.load_mtls().unwrap();
+
+        let spot_polymesh: PolyMesh<f32> = obj_spot.data.extract_polymesh().unwrap();
+        let mut attrib_iter = spot_polymesh
+            .attrib_iter::<Material, FaceIndex>("mtl")
+            .unwrap();
+        for mtl in &mut attrib_iter {
+            assert_eq!(
+                mtl,
+                &Material {
+                    name: "spot".to_string(),
+                    ka: Some([NotNan::new(1.0).unwrap(); 3]),
+                    ks: Some([NotNan::new(0.5).unwrap(); 3]),
+                    ke: Some([NotNan::new(0.0).unwrap(); 3]),
+                    ns: Some(NotNan::new(250.0).unwrap()),
+                    ni: Some(NotNan::new(1.45).unwrap()),
+                    d: Some(NotNan::new(1.0).unwrap()),
+                    illum: Some(2),
+                    map_kd: Some("spot_texture.png".to_string()),
+                    ..Default::default()
+                }
+            )
+        }
+        let obj_spot_roundtrip = convert_polymesh_to_obj_format(&spot_polymesh).unwrap();
+        let spot_polymesh2: PolyMesh<f32> = obj_spot_roundtrip.extract_polymesh().unwrap();
+        assert_eq!(spot_polymesh, spot_polymesh2);
     }
 }

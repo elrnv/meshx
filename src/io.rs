@@ -34,6 +34,9 @@ impl<T> Real for T where T: crate::Real + std::str::FromStr {}
 // Although code that relies on this is not idiomatic, it can sometimes be simpler.
 const UV_ATTRIB_NAME: &str = "uv";
 const NORMAL_ATTRIB_NAME: &str = "N";
+const MTL_ATTRIB_NAME: &str = "mtl";
+const OBJECT_ATTRIB_NAME: &str = "object";
+const GROUP_ATTRIB_NAME: &str = "group";
 
 /// A trait for specific scene, object or mesh models to extract mesh data from.
 ///
