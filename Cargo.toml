@@ -20,7 +20,7 @@ rayon = { version = "1", optional = true }
 ahash = { version = "0.8" }
 math = { package = "nalgebra", version = "0.33" }
 flatk = { git = "https://github.com/elrnv/flatk.git", version = "0.5" }
-vtkio = { version = "0.6", optional = true }
+vtkio = { git = "https://github.com/elrnv/vtkio.git", version = "0.7", optional = true }
 objio = { package = "obj", version = "0.10", optional = true }
 mshio = { version = "0.4", optional = true }
 ordered-float = { version = "5", default-features = false }
@@ -37,5 +37,5 @@ default = ["io"]
 io = ["vtkio", "objio", "mshio"]
 bench = ["criterion/real_blackbox", "rayon"]
 serde_all = ["serde", "math/serde-serialize"]
-#binary_vtk = ["vtkio/binary"]
+binary_vtk = ["vtkio/binary"]
 unstable = []
