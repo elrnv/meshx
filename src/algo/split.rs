@@ -10,7 +10,9 @@ use crate::attrib::*;
 use crate::index::*;
 use crate::mesh::topology::*;
 use crate::mesh::unstructured_mesh::CellType;
-use crate::mesh::{Mesh, PolyMesh, QuadMesh, TetMesh, TetMeshExt, TriMesh};
+use crate::mesh::{
+    Mesh, PolyMesh, QuadMesh, QuadMeshExt, TetMesh, TetMeshExt, TriMesh, TriMeshExt,
+};
 use crate::Real;
 
 /// Helper to isolate attributes based on the given connectivity info. Same as split_attributes but assuming a single component.
@@ -1100,6 +1102,8 @@ macro_rules! impl_split_for_uniform_mesh {
 
 impl_split_for_uniform_mesh!(TriMesh; 3; 0, 1, 2);
 impl_split_for_uniform_mesh!(QuadMesh; 4; 0, 1, 2, 3);
+impl_split_for_uniform_mesh!(TriMeshExt; 3; 0, 1, 2);
+impl_split_for_uniform_mesh!(QuadMeshExt; 4; 0, 1, 2, 3);
 
 impl<T: Real> Split<VertexIndex> for TetMeshExt<T> {
     fn split(self, vertex_partition: &[usize], num_parts: usize) -> Vec<Self> {
