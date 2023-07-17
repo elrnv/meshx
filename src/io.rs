@@ -502,6 +502,7 @@ mod tests {
     }
 
     // Test that loading a vtu file works as expected.
+    #[cfg(feature = "binary_vtk")]
     #[test]
     fn tet_vtu() -> Result<(), Error> {
         use crate::mesh::TetMesh;

@@ -24,8 +24,7 @@ macro_rules! impl_uniform_surface_mesh {
     ($mesh_type:ident, $base_type:ident, $verts_per_face:expr) => {
         impl<T: Real> $mesh_type<T> {
             pub fn new(verts: Vec<[T; 3]>, indices: Vec<[usize; $verts_per_face]>) -> $mesh_type<T> {
-                let (face_indices, face_offsets) =
-                    Self::compute_dual_topology(verts.len(), &indices);
+                let (face_indices, face_offsets) = Self::compute_dual_topology(verts.len(), &indices);
                 $mesh_type {
                     base_mesh: $base_type::new(verts, indices),
                     face_indices,
@@ -110,11 +109,11 @@ macro_rules! impl_uniform_surface_mesh {
                 }
 
                 let $mesh_type {
-                                                                            ref mut base_mesh,
-                                                                            ref mut face_indices,
-                                                                            ref mut face_offsets,
-                                                                            .. // face and face_{vertex,edge} attributes are unchanged
-                                                                        } = *self;
+                    ref mut base_mesh,
+                    ref mut face_indices,
+                    ref mut face_offsets,
+                    .. // face and face_{vertex,edge} attributes are unchanged
+                } = *self;
 
                 let order = base_mesh.sort_vertices_by_key(f);
 

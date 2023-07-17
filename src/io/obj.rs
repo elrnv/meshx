@@ -546,7 +546,7 @@ pub fn convert_polymesh_to_obj_format<T: Real>(mesh: &PolyMesh<T>) -> Result<Obj
         .enumerate()
     {
         let object = objects.entry(object_name).or_insert(HashMap::new());
-        let mut group = object.entry(group_name).or_insert(Group {
+        let group = object.entry(group_name).or_insert(Group {
             name: group_name.to_string(),
             index: 0,
             material: None,
