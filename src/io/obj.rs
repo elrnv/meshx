@@ -518,24 +518,20 @@ pub fn convert_polymesh_to_obj_format<T: Real>(mesh: &PolyMesh<T>) -> Result<Obj
 
     // Iterator over materials (each wrapped with some) or an iterator over none, if there is no material attribute.
     let mtls = mesh
-        .attrib_iter::<Material, FaceIndex>(MTL_ATTRIB_NAME)
-        .map(|iter| iter.map(|mtl| Some(mtl)))
+        .attrib::< FaceIndex>(MTL_ATTRIB_NAME)
+        .and_then(|attrib| attrib.indirect_iter::<Material>()).map(|iter| iter.map(|mtl| Some(mtl)))
         .into_iter()
         .flatten()
         .chain(std::iter::repeat(None));
     let object_names = mesh
         .attrib::<FaceIndex>(OBJECT_ATTRIB_NAME)
-        .unwrap() // No panic: Polymeshes have attribute value caches.
-        .indirect_iter::<String>()
-        .ok()
+        .and_then(|attrib| attrib.indirect_iter::<String>())
         .into_iter()
         .flatten()
         .chain(std::iter::repeat(&def_str));
     let group_names = mesh
         .attrib::<FaceIndex>(GROUP_ATTRIB_NAME)
-        .unwrap() // No panic: Polymeshes have attribute value caches.
-        .indirect_iter::<String>()
-        .ok()
+        .and_then(|attrib| attrib.indirect_iter::<String>())
         .into_iter()
         .flatten()
         .chain(std::iter::repeat(&def_str));
