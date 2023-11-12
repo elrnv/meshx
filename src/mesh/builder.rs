@@ -597,7 +597,7 @@ impl PlatonicSolidBuilder {
 
     /// Builds a regular cube as a `PolyMesh`.
     ///
-    /// All vertices on the cube have norm approximately equal to `1.0`.
+    /// All vertices on the cube have norm approximately equal to `1.0/3.0.sqrt()`.
     /// To create a cube with exact vertex positions, use `BoxBuilder`.
     pub fn build_cube<T: Real>(self) -> PolyMesh<T> {
         let h = T::from(self.radius / num_traits::Float::sqrt(3.0)).unwrap();
