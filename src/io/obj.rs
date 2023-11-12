@@ -518,8 +518,9 @@ pub fn convert_polymesh_to_obj_format<T: Real>(mesh: &PolyMesh<T>) -> Result<Obj
 
     // Iterator over materials (each wrapped with some) or an iterator over none, if there is no material attribute.
     let mtls = mesh
-        .attrib::< FaceIndex>(MTL_ATTRIB_NAME)
-        .and_then(|attrib| attrib.indirect_iter::<Material>()).map(|iter| iter.map(|mtl| Some(mtl)))
+        .attrib::<FaceIndex>(MTL_ATTRIB_NAME)
+        .and_then(|attrib| attrib.indirect_iter::<Material>())
+        .map(|iter| iter.map(|mtl| Some(mtl)))
         .into_iter()
         .flatten()
         .chain(std::iter::repeat(None));
