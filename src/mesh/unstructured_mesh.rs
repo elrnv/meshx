@@ -5,6 +5,8 @@
 //! cells of arbitrary shape.
 //!
 
+mod surface;
+
 use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::VertexPositions;
@@ -16,8 +18,26 @@ use flatk::*;
 /// A marker for the type of cell contained in a Mesh.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum CellType {
-    Tetrahedron,
     Triangle,
+    Quad,
+    Tetrahedron,
+    Pyramid,
+    Hexahedron,
+    Wedge,
+    /*VtkEmptyCell,
+    Vertex,
+    Line,
+    PolyLine,
+    VtkTriangleStrip,
+    VtkPolygon,
+    VtkPixel,
+    VtkQuad,
+    Voxel,
+    Hexahedron,
+    Wedge,
+    Pyramid,
+    PentagonalPrism,
+    HexagonalPrism,*/
 }
 
 impl CellType {
@@ -25,7 +45,25 @@ impl CellType {
     pub fn num_verts(&self) -> usize {
         match self {
             CellType::Triangle => 3,
+            CellType::Quad => 4,
             CellType::Tetrahedron => 4,
+            CellType::Pyramid => 5,
+            CellType::Hexahedron => 8,
+            CellType::Wedge => 6,
+            /*CellType::VtkEmptyCell => 0,
+            CellType::Vertex => 1,
+            CellType::Line => 2,
+            CellType::PolyLine =>
+            CellType::VtkTriangleStrip => {}
+            CellType::VtkPolygon => {}
+            CellType::VtkPixel => {}
+            CellType::VtkQuad => {}
+            CellType::Voxel => {}
+            CellType::Hexahedron => {}
+            CellType::Wedge => {}
+            CellType::Pyramid => {}
+            CellType::PentagonalPrism => {}
+            CellType::HexagonalPrism => {}*/
         }
     }
 }

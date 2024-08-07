@@ -11,7 +11,7 @@ use ahash::RandomState;
 
 /// A triangle with sorted vertices
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Debug)]
-struct SortedTri {
+pub struct SortedTri {
     pub sorted_indices: [usize; 3],
 }
 
