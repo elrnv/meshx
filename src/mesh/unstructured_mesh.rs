@@ -66,6 +66,45 @@ impl CellType {
             CellType::HexagonalPrism => {}*/
         }
     }
+    pub fn num_tri_faces(&self) -> usize {
+        match self {
+            CellType::Triangle => 1,
+            CellType::Quad => 0,
+            CellType::Tetrahedron => 4,
+            CellType::Pyramid => 4,
+            CellType::Hexahedron => 0,
+            CellType::Wedge => 2,
+        }
+    }
+    pub fn num_quad_faces(&self) -> usize {
+        match self {
+            CellType::Triangle => 0,
+            CellType::Quad => 1,
+            CellType::Tetrahedron => 0,
+            CellType::Pyramid => 1,
+            CellType::Hexahedron => 6,
+            CellType::Wedge => 3,
+        }
+    }
+
+    // see https://raw.githubusercontent.com/Kitware/vtk-examples/gh-pages/src/Testing/Baseline/Cxx/GeometricObjects/TestLinearCellDemo.png
+    // for vertex positions.
+    pub const TETRAHEDRON_FACES: [[usize; 3]; 4] = [[1, 3, 2], [0, 2, 3], [0, 3, 1], [0, 1, 2]];
+
+    pub const PYRAMID_TRIS: [[usize; 3]; 4] = [[0, 4, 1], [1, 4, 2], [2, 4, 3], [3, 4, 0]];
+    pub const PYRAMID_QUAD: [usize; 4] = [0, 1, 2, 3];
+
+    pub const WEDGE_TRIS: [[usize; 3]; 2] = [[0, 2, 1], [3, 4, 5]];
+    pub const WEDGE_QUADS: [[usize; 4]; 3] = [[0, 3, 5, 2], [2, 5, 4, 1], [1, 4, 3, 0]];
+
+    pub const HEXAHEDRON_FACES: [[usize; 4]; 6] = [
+        [0, 1, 2, 3],
+        [0, 3, 7, 4],
+        [0, 4, 5, 1],
+        [6, 2, 1, 5],
+        [6, 5, 4, 7],
+        [6, 7, 3, 2],
+    ];
 }
 
 /// Mesh with arbitrarily shaped elements or cells.

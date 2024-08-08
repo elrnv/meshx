@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::algo::merge::Merge;
 use crate::attrib::{Attrib, AttribDict, AttribIndex, Attribute, AttributeValue};
 use crate::mesh::topology::*;
@@ -62,6 +63,10 @@ pub fn convert_mesh_to_vtk_format<T: Real>(mesh: &Mesh<T>) -> Result<model::Vtk,
         .map(|cell_type| match cell_type {
             CellType::Tetrahedron => model::CellType::Tetra,
             CellType::Triangle => model::CellType::Triangle,
+            CellType::Pyramid => model::CellType::Pyramid,
+            CellType::Hexahedron => model::CellType::Hexahedron,
+            CellType::Wedge => model::CellType::Wedge,
+            CellType::Quad => model::CellType::Quad,
         })
         .collect();
 
@@ -293,6 +298,8 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
         let model::Vtk {
             file_path, data, ..
         } = &self;
+        dbg!("Extracting mesh!");
+        let mut cell_type_list = HashSet::<String>::default();
         match data {
             model::DataSet::UnstructuredGrid { pieces, .. } => {
                 Ok(Mesh::merge_iter(pieces.iter().filter_map(|piece| {
@@ -324,6 +331,7 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                     let mut cell_types = Vec::new();
                     for (c, &end) in offsets.iter().enumerate() {
                         let n = end as usize - begin;
+                        cell_type_list.insert(format!("{:?}", types[c]));
                         let cell_type = match types[c] {
                             model::CellType::Triangle if n == 3 => CellType::Triangle,
                             model::CellType::Tetra if n == 4 => CellType::Tetrahedron,
@@ -351,7 +359,7 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                         }
                         begin = end as usize;
                     }
-
+                    println!("Cell variants: {:?}", cell_type_list.iter().collect::<Vec<_>>());
                     let mut mesh =
                         Mesh::from_cells_counts_and_types(pts, indices, counts, cell_types);
 

@@ -16,7 +16,7 @@ pub struct SortedTri {
 }
 
 impl SortedTri {
-    fn new([a, b, c]: [usize; 3]) -> Self {
+    pub(crate) fn new([a, b, c]: [usize; 3]) -> Self {
         SortedTri {
             sorted_indices: {
                 if a <= b {
@@ -63,7 +63,7 @@ impl TetFace {
 
 /// A utility function to index a slice using three indices, creating a new array of 3
 /// corresponding entries of the slice.
-fn tri_at<T: Copy>(slice: &[T], tri: &[usize; 3]) -> [T; 3] {
+pub fn tri_at<T: Copy>(slice: &[T], tri: &[usize; 3]) -> [T; 3] {
     [slice[tri[0]], slice[tri[1]], slice[tri[2]]]
 }
 

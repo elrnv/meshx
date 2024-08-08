@@ -1,4 +1,4 @@
-use crate::{CellType, Index, Mesh, Real, SortedTri, TetFace, TriMesh};
+use crate::{tri_at, CellType, Index, Mesh, Real, SortedTri, TetFace, TriMesh};
 
 use crate::attrib::{Attrib, AttribDict, IntrinsicAttribute};
 use crate::topology::{
@@ -6,6 +6,7 @@ use crate::topology::{
 };
 use ahash::AHashMap as HashMap;
 use ahash::RandomState;
+use flatk::ChunkedN;
 
 /// A quad with sorted vertices
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Debug)]
@@ -30,7 +31,7 @@ pub struct QuadFace {
     pub quad: [usize; 4],
     /// Index of the corresponding quad within the source mesh.
     pub quad_index: usize,
-    /// Index of the face within the tet betweeen 0 and 4.
+    /// Index of the face within the cell
     pub face_index: usize,
 }
 
@@ -95,39 +96,78 @@ impl<T: Real> Mesh<T> {
     ///
     /// This function assumes that the given Mesh is a manifold.
     fn surface_ngon_set<'a>(
-        cells: impl std::iter::ExactSizeIterator<Item = &'a [usize]>,
+        indices: &flatk::Clumped<Vec<usize>>,
+        types: impl std::iter::ExactSizeIterator<Item = CellType>,
     ) -> (HashMap<SortedTri, TetFace>, HashMap<SortedQuad, QuadFace>) {
+        let mut tri_count = 0;
+        let mut quad_count = 0;
+
+        for (cells, cell_type) in indices.clump_iter().zip(&types) {
+            let cell_count = cells.view().data.len() * cells.view().chunk_size;
+            tri_count += cell_type.num_tri_faces() * cell_count;
+            quad_count += cell_type.num_quad_faces() * cell_count;
+        }
+
         let mut triangles: HashMap<SortedTri, TetFace> = {
             // This will make surfacing tetmeshes deterministic.
             let hash_builder = RandomState::with_seeds(7, 47, 2377, 719);
-            HashMap::with_capacity_and_hasher(cells.len() * 4, hash_builder)
+            HashMap::with_capacity_and_hasher(tri_count * 3, hash_builder)
         };
         let mut quads: HashMap<SortedQuad, QuadFace> = {
-            // This will make surfacing tetmeshes deterministic.
             let hash_builder = RandomState::with_seeds(7, 47, 2377, 719);
-            HashMap::with_capacity_and_hasher(cells.len() * 4, hash_builder)
+            HashMap::with_capacity_and_hasher(quad_count * 4, hash_builder)
         };
-        // todo: figure out how to accept the list of cells divided by type
-        //  ensure below algo actualyl works
-        //  and and seperate by cell type how we process teh cells.
-        //  might need cell enums to have explicit definition>??>
-        let add_quad_faces = |(i, cell): (usize, &[usize; 4])| {
-            for (face_idx, quad_face) in Self::TET_FACES.iter().enumerate() {
-                let face = QuadFace {
-                    quad: quad_at(cell, quad_face),
-                    quad_index: i,
-                    face_index: face_idx,
-                };
 
-                let key = SortedQuad::new(face.quad);
+        let add_tri_faces = |(cells, faces): (&ChunkedN<&[usize]>, &[[usize; 3]])| {
+            for (i, cell) in cells.iter().enumerate() {
+                for (face_idx, tet_face) in faces.iter().enumerate() {
+                    let face = TetFace {
+                        tri: tri_at(cell, tet_face),
+                        tet_index: i,
+                        face_index: face_idx,
+                    };
 
-                if quads.remove(&key).is_none() {
-                    quads.insert(key, face);
+                    let key = SortedTri::new(face.tri);
+
+                    if triangles.remove(&key).is_none() {
+                        triangles.insert(key, face);
+                    }
                 }
             }
         };
+        // todo: impl for tri faces
+        // returns the number of faces used so far, the index the next set of faces should start with.
+        let add_quad_faces =
+            |cells: &ChunkedN<&[usize]>, faces: &[[usize; 4]], starting_idx: usize| -> usize {
+                for (i, cell) in cells.iter().enumerate() {
+                    for (face_idx, tet_face) in faces.iter().enumerate() {
+                        let face = QuadFace {
+                            quad: quad_at(cell, tet_face),
+                            quad_index: i,
+                            face_index: starting_idx + face_idx,
+                        };
 
-        cells.enumerate().for_each(add_quad_faces);
+                        let key = SortedQuad::new(face.quad);
+
+                        if quads.remove(&key).is_none() {
+                            quads.insert(key, face);
+                        }
+                    }
+                }
+                starting_idx + faces.len()
+            };
+
+        for (cells, cell_type) in indices.clump_iter().zip(types) {
+            match cell_type {
+                CellType::Triangle => {}
+                CellType::Quad => {}
+                CellType::Tetrahedron => add_tri_faces((cells, CellType::TETRAHEDRON_FACES)),
+                CellType::Pyramid => {}
+                CellType::Hexahedron => {}
+                CellType::Wedge => {}
+            }
+        }
+
         (triangles, quads)
     }
 
@@ -148,7 +188,7 @@ impl<T: Real> Mesh<T> {
     where
         F: FnMut(&TetFace) -> bool,
     {
-        let (triangles, quads) = Self::surface_ngon_set(self.cell_iter(), self.cell_type_iter());
+        let (triangles, quads) = Self::surface_ngon_set(self.cells, self.cell_type_iter());
 
         let total = triangles.len() + quads.len();
         let mut surface_tris = Vec::with_capacity(triangles.len());

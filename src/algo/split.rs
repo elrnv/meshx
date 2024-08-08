@@ -566,6 +566,10 @@ impl<T: Real> Mesh<T> {
                     };
                     TypedMesh::Tet(tetmesh)
                 }
+                CellType::Pyramid => {todo!()}
+                CellType::Hexahedron => {todo!()}
+                CellType::Wedge => {todo!()}
+                CellType::Quad => {todo!()}
             });
 
             // Clear new_vertex_index array.
