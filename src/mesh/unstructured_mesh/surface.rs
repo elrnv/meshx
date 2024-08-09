@@ -33,6 +33,7 @@ pub struct QuadFace {
     pub quad_index: usize,
     /// Index of the face within the cell
     pub face_index: usize,
+    pub cell_type: CellType,
 }
 
 impl QuadFace {
@@ -97,12 +98,12 @@ impl<T: Real> Mesh<T> {
     /// This function assumes that the given Mesh is a manifold.
     fn surface_ngon_set<'a>(
         indices: &flatk::Clumped<Vec<usize>>,
-        types: impl std::iter::ExactSizeIterator<Item = CellType>,
+        types: impl std::iter::ExactSizeIterator<Item = &'a CellType> + Clone,
     ) -> (HashMap<SortedTri, TetFace>, HashMap<SortedQuad, QuadFace>) {
         let mut tri_count = 0;
         let mut quad_count = 0;
 
-        for (cells, cell_type) in indices.clump_iter().zip(&types) {
+        for (cells, cell_type) in indices.clump_iter().zip(types.clone()) {
             let cell_count = cells.view().data.len() * cells.view().chunk_size;
             tri_count += cell_type.num_tri_faces() * cell_count;
             quad_count += cell_type.num_quad_faces() * cell_count;
@@ -118,13 +119,19 @@ impl<T: Real> Mesh<T> {
             HashMap::with_capacity_and_hasher(quad_count * 4, hash_builder)
         };
 
-        let add_tri_faces = |(cells, faces): (&ChunkedN<&[usize]>, &[[usize; 3]])| {
+        // returns the number of faces used so far: the index the next set of faces should start with.
+        let mut add_tri_faces = |cells: &ChunkedN<&[usize]>,
+                                 faces: &[[usize; 3]],
+                                 starting_idx: usize,
+                                 cell_type: CellType|
+         -> usize {
             for (i, cell) in cells.iter().enumerate() {
                 for (face_idx, tet_face) in faces.iter().enumerate() {
                     let face = TetFace {
                         tri: tri_at(cell, tet_face),
                         tet_index: i,
-                        face_index: face_idx,
+                        face_index: starting_idx + face_idx,
+                        cell_type,
                     };
 
                     let key = SortedTri::new(face.tri);
@@ -134,37 +141,50 @@ impl<T: Real> Mesh<T> {
                     }
                 }
             }
+            starting_idx + faces.len()
         };
-        // todo: impl for tri faces
-        // returns the number of faces used so far, the index the next set of faces should start with.
-        let add_quad_faces =
-            |cells: &ChunkedN<&[usize]>, faces: &[[usize; 4]], starting_idx: usize| -> usize {
-                for (i, cell) in cells.iter().enumerate() {
-                    for (face_idx, tet_face) in faces.iter().enumerate() {
-                        let face = QuadFace {
-                            quad: quad_at(cell, tet_face),
-                            quad_index: i,
-                            face_index: starting_idx + face_idx,
-                        };
+        let mut add_quad_faces = |cells: &ChunkedN<&[usize]>,
+                                  faces: &[[usize; 4]],
+                                  starting_idx: usize,
+                                  cell_type: CellType|
+         -> usize {
+            for (i, cell) in cells.iter().enumerate() {
+                for (face_idx, tet_face) in faces.iter().enumerate() {
+                    let face = QuadFace {
+                        quad: quad_at(cell, tet_face),
+                        quad_index: i,
+                        face_index: starting_idx + face_idx,
+                        cell_type,
+                    };
 
-                        let key = SortedQuad::new(face.quad);
+                    let key = SortedQuad::new(face.quad);
 
-                        if quads.remove(&key).is_none() {
-                            quads.insert(key, face);
-                        }
+                    if quads.remove(&key).is_none() {
+                        quads.insert(key, face);
                     }
                 }
-                starting_idx + faces.len()
-            };
+            }
+            starting_idx + faces.len()
+        };
 
         for (cells, cell_type) in indices.clump_iter().zip(types) {
             match cell_type {
                 CellType::Triangle => {}
                 CellType::Quad => {}
-                CellType::Tetrahedron => add_tri_faces((cells, CellType::TETRAHEDRON_FACES)),
-                CellType::Pyramid => {}
-                CellType::Hexahedron => {}
-                CellType::Wedge => {}
+                CellType::Tetrahedron => {
+                    add_tri_faces(&cells, &CellType::TETRAHEDRON_FACES, 0, *cell_type);
+                }
+                CellType::Pyramid => {
+                    let i = add_tri_faces(&cells, &CellType::PYRAMID_TRIS, 0, *cell_type);
+                    add_quad_faces(&cells, &[CellType::PYRAMID_QUAD], i, *cell_type);
+                }
+                CellType::Hexahedron => {
+                    add_quad_faces(&cells, &CellType::HEXAHEDRON_FACES, 0, *cell_type);
+                }
+                CellType::Wedge => {
+                    let i = add_tri_faces(&cells, &CellType::WEDGE_TRIS, 0, *cell_type);
+                    add_quad_faces(&cells, &CellType::WEDGE_QUADS, i, *cell_type);
+                }
             }
         }
 
@@ -181,36 +201,57 @@ impl<T: Real> Mesh<T> {
     /// This function assumes that the given mesh is a manifold.
     ///
     /// (triangles, quads, cells, cell_face_indices)
-    pub fn surface_ngon_data<F>(
+    pub fn surface_ngon_data<F1, F2>(
         &self,
-        filter: F,
-    ) -> (Vec<[usize; 3]>, Vec<[usize; 4]>, Vec<usize>, Vec<usize>)
+        tri_filter: F1,
+        quad_filter: F2,
+    ) -> (
+        Vec<[usize; 3]>,
+        Vec<[usize; 4]>,
+        Vec<usize>,
+        Vec<usize>,
+        Vec<CellType>,
+    )
     where
-        F: FnMut(&TetFace) -> bool,
+        F1: FnMut(&TetFace) -> bool,
+        F2: FnMut(&QuadFace) -> bool,
     {
-        let (triangles, quads) = Self::surface_ngon_set(self.cells, self.cell_type_iter());
+        let (triangles, quads) = Self::surface_ngon_set(&self.indices, self.types.iter());
 
         let total = triangles.len() + quads.len();
         let mut surface_tris = Vec::with_capacity(triangles.len());
         let mut surface_quads = Vec::with_capacity(quads.len());
         let mut cell_indices = Vec::with_capacity(total);
         let mut cell_face_indices = Vec::with_capacity(total);
-        for face in triangles.into_iter().map(|(_, face)| face).filter(filter) {
-            surface_tris.push(face.quad);
-            cell_indices.push(face.quad_index);
+        let mut cell_types = Vec::with_capacity(total);
+        for face in triangles
+            .into_iter()
+            .map(|(_, face)| face)
+            .filter(tri_filter)
+        {
+            surface_tris.push(face.tri);
+            cell_indices.push(face.tet_index);
+            cell_face_indices.push(face.face_index);
             cell_face_indices.push(face.face_index);
         }
-        for face in quads.into_iter().map(|(_, face)| face).filter(filter) {
+        for face in quads.into_iter().map(|(_, face)| face).filter(quad_filter) {
             surface_quads.push(face.quad);
             cell_indices.push(face.quad_index);
             cell_face_indices.push(face.face_index);
+            cell_face_indices.push(face.face_index);
         }
 
-        (surface_topo, cell_indices, cell_face_indices)
+        (
+            surface_tris,
+            surface_quads,
+            cell_indices,
+            cell_face_indices,
+            cell_types,
+        )
     }
 
     pub fn surface_mesh(&self) -> Mesh<T> {
-        self.surface_trimesh_with_mapping_and_filter(None, None, None, None, |_| true)
+        self.surface_trimesh_with_mapping_and_filter(None, None, None, None, |_| true, |_| true)
     }
 
     pub fn surface_trimesh_with_mapping(
@@ -226,6 +267,7 @@ impl<T: Real> Mesh<T> {
             original_tet_vertex_index_name,
             original_tet_face_index_name,
             |_| true,
+            |_| true,
         )
     }
 
@@ -235,11 +277,12 @@ impl<T: Real> Mesh<T> {
         original_tet_index_name: Option<&str>,
         original_tet_vertex_index_name: Option<&str>,
         original_tet_face_index_name: Option<&str>,
-        filter: impl FnMut(&TetFace) -> bool,
+        tri_filter: impl FnMut(&TetFace) -> bool,
+        quad_filter: impl FnMut(&QuadFace) -> bool,
     ) -> Mesh<T> {
         // Get the surface topology of this tetmesh.
-        let (mut tri_topo, mut quad_topo, cell_indices, cell_face_indices) =
-            self.surface_ngon_data(filter);
+        let (mut tri_topo, mut quad_topo, cell_indices, cell_face_indices, cell_types) =
+            self.surface_ngon_data(tri_filter, quad_filter);
 
         // Record which vertices we have already handled.
         let mut seen = vec![-1isize; self.num_vertices()];
@@ -313,18 +356,26 @@ impl<T: Real> Mesh<T> {
             face_vertex_attributes.insert(
                 name.to_string(),
                 attrib.promote_with(|new, old| {
-                    for (&tet_idx, &tet_face_idx) in
-                        cell_indices.iter().zip(cell_face_indices.iter())
+                    for (&tet_idx, &tet_face_idx, cell_type) in cell_indices
+                        .iter()
+                        .zip(cell_face_indices.iter())
+                        .zip(cell_types.iter())
+                        .map(|((a, b), c)| (a, b, c))
                     {
-                        for &i in Self::TET_FACES[tet_face_idx].iter() {
+                        // todo: create an inverse mapping from the face idx.
+                        //  the inverse of the mapping created during surface extraction.
+                        //  Consider creating utility functions for this on the cell type.
+
+                        // I think we need to know the cell type at this point...
+                        /*for &i in Self::TET_FACES[tet_face_idx].iter() {
                             let tet_vtx_idx = self.cell_vertex(tet_idx, i);
                             new.push_cloned(old.get(Index::from(tet_vtx_idx).unwrap()));
-                        }
+                        }*/
                     }
                 }),
             );
         }
-
+        todo!();
         let mut trimesh = TriMesh {
             vertex_positions: IntrinsicAttribute::from_vec(surf_vert_pos),
             indices: IntrinsicAttribute::from_vec(tri_topo),
@@ -360,6 +411,6 @@ impl<T: Real> Mesh<T> {
                 .expect("Failed to add original tet face index attribute.");
         }*/
 
-        trimesh
+        trimesh;
     }
 }

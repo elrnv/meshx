@@ -48,6 +48,7 @@ pub struct TetFace {
     pub tet_index: usize,
     /// Index of the face within the tet betweeen 0 and 4.
     pub face_index: usize,
+    pub cell_type: CellType,
 }
 
 impl TetFace {
@@ -120,6 +121,7 @@ impl<T: Real> TetMesh<T> {
                     tri: tri_at(cell, tet_face),
                     tet_index: i,
                     face_index: face_idx,
+                    cell_type: CellType::Tetrahedron,
                 };
 
                 let key = SortedTri::new(face.tri);

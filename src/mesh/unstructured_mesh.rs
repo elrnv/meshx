@@ -16,7 +16,7 @@ use crate::Real;
 use flatk::*;
 
 /// A marker for the type of cell contained in a Mesh.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CellType {
     Triangle,
     Quad,
