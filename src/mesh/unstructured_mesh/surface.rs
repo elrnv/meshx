@@ -1,4 +1,5 @@
 use crate::{tri_at, CellType, Index, Mesh, Real, SortedTri, TetFace, TriMesh};
+use std::fmt;
 
 use crate::attrib::{Attrib, AttribDict, IntrinsicAttribute};
 use crate::topology::{
@@ -30,10 +31,20 @@ pub struct QuadFace {
     /// Vertex indices in the source mesh forming this face.
     pub quad: [usize; 4],
     /// Index of the corresponding quad within the source mesh.
-    pub quad_index: usize,
+    pub cell_index: usize,
     /// Index of the face within the cell
     pub face_index: usize,
     pub cell_type: CellType,
+}
+
+impl fmt::Debug for QuadFace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "QuadFace {{ quad: {:?}, cell_index: {}, face_index: {}, cell_type: {:?} }}",
+            self.quad, self.cell_index, self.face_index, self.cell_type
+        )
+    }
 }
 
 impl QuadFace {
@@ -152,7 +163,7 @@ impl<T: Real> Mesh<T> {
                 for (face_idx, tet_face) in faces.iter().enumerate() {
                     let face = QuadFace {
                         quad: quad_at(cell, tet_face),
-                        quad_index: i,
+                        cell_index: i,
                         face_index: starting_idx + face_idx,
                         cell_type,
                     };
@@ -236,7 +247,7 @@ impl<T: Real> Mesh<T> {
         }
         for face in quads.into_iter().map(|(_, face)| face).filter(quad_filter) {
             surface_quads.push(face.quad);
-            cell_indices.push(face.quad_index);
+            cell_indices.push(face.cell_index);
             cell_face_indices.push(face.face_index);
             cell_face_indices.push(face.face_index);
         }
@@ -412,5 +423,62 @@ impl<T: Real> Mesh<T> {
         }*/
 
         trimesh;
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mesh::{CellType, Mesh};
+
+    #[test]
+    fn test_surface_ngon_set() {
+        // Create a simple mesh with a tetrahedron and a pyramid
+        let points = vec![
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 1.0, 0.0],
+            [0.5, 0.0, 1.0],
+        ];
+        let cells = vec![
+            vec![3, 2, 4, 5],    // tetrahedron
+            vec![0, 1, 4, 2, 3], // pyramid
+        ];
+        // tetrahedron on top of pyramid
+        // (just imagine the line from 5 to 4 for the tetrahedrons last side)
+        //
+        //        2.+------+4
+        //        //|    / |
+        //       / ||   /  |
+        //      / / |  /   |
+        //     / / 0+-/----+1
+        //   5+  | / /   -/
+        //    | / / /  -/
+        //    |/ / / -/
+        //    ||//--/
+        //    ///-/
+        //   3+-/
+
+        let types = vec![CellType::Tetrahedron, CellType::Pyramid];
+
+        let mesh = Mesh::from_cells_and_types(points, cells, types);
+
+        let (triangles, quads) = Mesh::<f64>::surface_ngon_set(&mesh.indices, mesh.types.iter());
+
+        /*
+        triangles
+            .iter()
+            .for_each(|(key, value)| println!("{:?}: {:?}", key, value));
+        quads
+            .iter()
+            .for_each(|(key, value)| println!("{:?}: {:?}", key, value));
+        */
+
+        // assert that the triangle connecting the two shapes doesn't exist.
+        assert!(triangles
+            .iter()
+            .find(|x| x.0.sorted_indices == [2, 3, 4])
+            .is_none())
     }
 }

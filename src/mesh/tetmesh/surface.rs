@@ -3,6 +3,7 @@ use crate::index::{CheckedIndex, Index};
 use crate::mesh::topology::*;
 use crate::mesh::*;
 use crate::Real;
+use std::fmt;
 
 use super::TetMesh;
 
@@ -49,6 +50,15 @@ pub struct TetFace {
     /// Index of the face within the tet betweeen 0 and 4.
     pub face_index: usize,
     pub cell_type: CellType,
+}
+impl fmt::Debug for TetFace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TetFace {{ tri: {:?}, tet_index: {}, face_index: {}, cell_type: {:?} }}",
+            self.tri, self.tet_index, self.face_index, self.cell_type
+        )
+    }
 }
 
 impl TetFace {
