@@ -12,8 +12,7 @@ use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::VertexPositions;
 use crate::utils::slice::apply_permutation_with_seen;
 use crate::Real;
-
-use flatk::*;
+use flatk::{Chunked, ClumpedView, GetOffset, IntoValues, Offsets, Set, View, ViewMut};
 
 /// A marker for the type of cell contained in a Mesh.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -87,8 +86,12 @@ impl CellType {
         }
     }
 
+    pub const EMPTY: [usize; 0] = [];
+
     // see https://raw.githubusercontent.com/Kitware/vtk-examples/gh-pages/src/Testing/Baseline/Cxx/GeometricObjects/TestLinearCellDemo.png
     // for vertex positions.
+    // Defines an "order" for the faces of different cells. Larger ngons are always indexed
+    // after smaller ones when used in nth_face_vertices and enumerate_faces
     pub const TETRAHEDRON_FACES: [[usize; 3]; 4] = [[1, 3, 2], [0, 2, 3], [0, 3, 1], [0, 1, 2]];
 
     pub const PYRAMID_TRIS: [[usize; 3]; 4] = [[0, 4, 1], [1, 4, 2], [2, 4, 3], [3, 4, 0]];
@@ -105,6 +108,94 @@ impl CellType {
         [6, 5, 4, 7],
         [6, 7, 3, 2],
     ];
+
+    /// Utility function for getting the cell's nth face's vertices.
+    /// nth as defined by [`enumerate_faces`]
+    pub fn nth_face_vertices(&self, nth_face: usize) -> std::slice::Iter<usize> {
+        match self {
+            CellType::Triangle => CellType::EMPTY.iter(),
+            CellType::Quad => CellType::EMPTY.iter(),
+            CellType::Tetrahedron => CellType::TETRAHEDRON_FACES[nth_face].iter(),
+            CellType::Pyramid => {
+                if let Some(face) = CellType::PYRAMID_TRIS.get(nth_face) {
+                    face.iter()
+                } else {
+                    CellType::PYRAMID_QUAD.iter()
+                }
+            }
+            CellType::Hexahedron => CellType::HEXAHEDRON_FACES[nth_face].iter(),
+            CellType::Wedge => {
+                if let Some(face) = CellType::WEDGE_TRIS.get(nth_face) {
+                    face.iter()
+                } else {
+                    CellType::WEDGE_QUADS[nth_face - CellType::WEDGE_TRIS.len()].iter()
+                }
+            }
+        }
+    }
+
+    /// Enumerates all faces of a cell type, calling handlers for triangular and quadrilateral faces respectively.
+    ///
+    /// This method provides an efficient way to iterate over all faces of a cell, maintaining
+    /// consistency with the `nth_face_vertices` method. It calls the provided closure for each face,
+    /// passing the face index (corresponding to the `nth_face` in `nth_face_vertices`) and a reference
+    /// to the array of vertex indices defining the face.
+    ///
+    /// # Arguments
+    ///
+    /// * `tri_handler` - A closure that handles triangular faces. It receives two arguments:
+    ///   - `usize`: The index of the triangular face.
+    ///   - `&[usize; 3]`: A reference to an array of 3 vertex indices defining the triangular face.
+    ///
+    /// * `quad_handler` - A closure that handles quadrilateral faces. It receives two arguments:
+    ///   - `usize`: The index of the quadrilateral face.
+    ///   - `&[usize; 4]`: A reference to an array of 4 vertex indices defining the quadrilateral face.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// cell_type.enumerate_faces(
+    ///     |tri_index, tri_vertices| {
+    ///
+    ///     },
+    ///     |quad_index, quad_vertices| {
+    ///
+    ///     }
+    /// );
+    /// ```
+    pub fn enumerate_faces<F, G>(&self, mut tri_handler: F, mut quad_handler: G)
+    where
+        F: FnMut(usize, &[usize; 3]),
+        G: FnMut(usize, &[usize; 4]),
+    {
+        match self {
+            CellType::Triangle | CellType::Quad => {}
+            CellType::Tetrahedron => {
+                for (face_index, face_vertices) in Self::TETRAHEDRON_FACES.iter().enumerate() {
+                    tri_handler(face_index, face_vertices);
+                }
+            }
+            CellType::Pyramid => {
+                for (face_index, face_vertices) in Self::PYRAMID_TRIS.iter().enumerate() {
+                    tri_handler(face_index, face_vertices);
+                }
+                quad_handler(Self::PYRAMID_TRIS.len(), &Self::PYRAMID_QUAD);
+            }
+            CellType::Hexahedron => {
+                for (face_index, face_vertices) in Self::HEXAHEDRON_FACES.iter().enumerate() {
+                    quad_handler(face_index, face_vertices);
+                }
+            }
+            CellType::Wedge => {
+                for (tri_index, face_vertices) in Self::WEDGE_TRIS.iter().enumerate() {
+                    tri_handler(tri_index, face_vertices);
+                }
+                for (quad_index, face_vertices) in Self::WEDGE_QUADS.iter().enumerate() {
+                    quad_handler(quad_index + Self::WEDGE_TRIS.len(), face_vertices);
+                }
+            }
+        }
+    }
 }
 
 /// Mesh with arbitrarily shaped elements or cells.
@@ -685,6 +776,7 @@ impl<T: Real> CellVertex for Mesh<T> {
     where
         CI: Copy + Into<CellIndex>,
     {
+        use flatk::Get;
         let cidx = usize::from(cidx.into());
         let num_verts_at_cell = self.indices.view().get(cidx)?.len();
         if which >= num_verts_at_cell {
@@ -707,6 +799,7 @@ impl<T: Real> CellVertex for Mesh<T> {
     where
         CI: Copy + Into<CellIndex>,
     {
+        use flatk::Get;
         let cidx = usize::from(cidx.into());
         self.indices.view().at(cidx).len()
     }
@@ -809,6 +902,7 @@ impl<T: Real> From<super::PointCloud<T>> for Mesh<T> {
 mod tests {
     use super::*;
     use crate::index::Index;
+    use flatk::Get;
 
     fn build_simple_mesh() -> Mesh<f64> {
         let points = vec![
