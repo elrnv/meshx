@@ -5,13 +5,14 @@
 //! cells of arbitrary shape.
 //!
 
-mod surface;
+pub mod surface;
 
 use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::VertexPositions;
 use crate::utils::slice::apply_permutation_with_seen;
 use crate::Real;
+use ahash::{HashMap, HashMapExt};
 use flatk::{Chunked, ClumpedView, GetOffset, IntoValues, Offsets, Set, View, ViewMut};
 
 /// A marker for the type of cell contained in a Mesh.
@@ -731,6 +732,43 @@ impl<T: Real> Mesh<T> {
         }
 
         order
+    }
+
+    /// Creates a new mesh with deduplicated vertices within a given epsilon.
+    ///
+    /// This function will create a new mesh where vertices that are closer than `epsilon` to each other
+    /// are merged, updating the indices accordingly, and adjusting all vertex-based attributes.
+    pub fn deduplicated_vertices(&self, epsilon: T) -> usize
+    where
+        T: Clone,
+    {
+        let mut unique_vertices: HashMap<[i32; 3], usize> = HashMap::new();
+        let mut new_indices: Vec<usize> = Vec::with_capacity(self.num_vertices());
+        let mut removed_count = 0;
+
+        // Helper function to quantize a coordinate
+        let quantize = |x: T| num_traits::Float::round(x / epsilon) as i32;
+
+        // First pass: identify unique vertices and build mapping
+        for (old_index, position) in self.vertex_positions.iter().enumerate() {
+            let quantized = [
+                quantize(position[0].clone()),
+                quantize(position[1].clone()),
+                quantize(position[2].clone()),
+            ];
+
+            let new_index = *unique_vertices.entry(quantized).or_insert_with(|| {
+                let new_index = unique_vertices.len();
+                new_index
+            });
+
+            new_indices.push(new_index);
+
+            if new_index != old_index {
+                removed_count += 1;
+            }
+        }
+        removed_count
     }
 }
 

@@ -267,7 +267,7 @@ impl<T: Real> Mesh<T> {
         quad_filter: impl FnMut(&QuadFace) -> bool,
     ) -> PolyMesh<T> {
         // Get the surface topology of this tetmesh.
-        let (mut topo, offsets, cell_indices, cell_face_indices, cell_types) =
+        let (mut topo, mut offsets, cell_indices, cell_face_indices, cell_types) =
             self.surface_ngon_data(tri_filter, quad_filter);
 
         // Record which vertices we have already handled.
@@ -359,6 +359,7 @@ impl<T: Real> Mesh<T> {
             );
         }
 
+        offsets.push(topo.len());
         let mut polymesh = PolyMesh {
             vertex_positions: IntrinsicAttribute::from_vec(surf_vert_pos),
             indices: topo,
