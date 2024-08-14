@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use crate::algo::merge::Merge;
 use crate::attrib::{Attrib, AttribDict, AttribIndex, Attribute, AttributeValue};
 use crate::mesh::topology::*;
@@ -7,6 +6,7 @@ use flatk::{
     consts::{U10, U11, U12, U13, U14, U15, U16, U2, U3, U4, U5, U6, U7, U8, U9},
     U,
 };
+use std::collections::HashSet;
 
 use super::MeshExtractor;
 use super::Real;
@@ -335,6 +335,9 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                         let cell_type = match types[c] {
                             model::CellType::Triangle if n == 3 => CellType::Triangle,
                             model::CellType::Tetra if n == 4 => CellType::Tetrahedron,
+                            model::CellType::Pyramid if n == 5 => CellType::Pyramid,
+                            model::CellType::Hexahedron if n == 8 => CellType::Hexahedron,
+                            model::CellType::Wedge if n == 6 => CellType::Wedge,
                             _ => {
                                 // Not a valid cell type, skip it.
                                 begin = end as usize;
@@ -359,7 +362,10 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                         }
                         begin = end as usize;
                     }
-                    println!("Cell variants: {:?}", cell_type_list.iter().collect::<Vec<_>>());
+                    println!(
+                        "Cell variants: {:?}",
+                        cell_type_list.iter().collect::<Vec<_>>()
+                    );
                     let mut mesh =
                         Mesh::from_cells_counts_and_types(pts, indices, counts, cell_types);
 

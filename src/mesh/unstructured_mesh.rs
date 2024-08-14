@@ -738,7 +738,7 @@ impl<T: Real> Mesh<T> {
     ///
     /// This function will create a new mesh where vertices that are closer than `epsilon` to each other
     /// are merged, updating the indices accordingly, and adjusting all vertex-based attributes.
-    pub fn deduplicated_vertices(&self, epsilon: T) -> usize
+    pub fn deduplicated_vertices(&self, epsilon: T) -> (Mesh<T>, usize)
     where
         T: Clone,
     {
@@ -746,10 +746,8 @@ impl<T: Real> Mesh<T> {
         let mut new_indices: Vec<usize> = Vec::with_capacity(self.num_vertices());
         let mut removed_count = 0;
 
-        // Helper function to quantize a coordinate
-        let quantize = |x: T| num_traits::Float::round(x / epsilon) as i32;
+        let quantize = |x: T| num_traits::Float::round(x / epsilon).to_i32().unwrap();
 
-        // First pass: identify unique vertices and build mapping
         for (old_index, position) in self.vertex_positions.iter().enumerate() {
             let quantized = [
                 quantize(position[0].clone()),
@@ -757,18 +755,55 @@ impl<T: Real> Mesh<T> {
                 quantize(position[2].clone()),
             ];
 
-            let new_index = *unique_vertices.entry(quantized).or_insert_with(|| {
-                let new_index = unique_vertices.len();
-                new_index
-            });
+            let new_index = unique_vertices.len();
+            let new_index = match unique_vertices.entry(quantized) {
+                Entry::Occupied(o) => {
+                    removed_count += 1;
+                    *o.get()
+                }
+                Entry::Vacant(v) => {
+                    v.insert(new_index);
+                    new_index
+                }
+            };
 
             new_indices.push(new_index);
+        }
 
-            if new_index != old_index {
-                removed_count += 1;
+        let mut new_cell_indices = self.indices.clone();
+        for cell in new_cell_indices.iter_mut() {
+            for index in cell.iter_mut() {
+                *index = new_indices[*index];
             }
         }
-        removed_count
+
+        let mut new_positions = vec![[T::zero(); 3]; unique_vertices.len()];
+        for (old_index, &new_index) in new_indices.iter().enumerate() {
+            new_positions[new_index] = self.vertex_positions[old_index].clone();
+        }
+
+        let mut vertex_attributes: AttribDict<VertexIndex> = AttribDict::new();
+
+        for (name, attrib) in self.attrib_dict::<VertexIndex>().iter() {
+            let new_attrib = attrib.duplicate_with_len(new_positions.len(), |mut new, old| {
+                for (&idx, val) in new_indices.iter().zip(old.iter()) {
+                    new.get_mut(idx).clone_from_other(val).unwrap();
+                }
+            });
+            vertex_attributes.insert(name.to_string(), new_attrib);
+        }
+
+        let new_mesh = Mesh {
+            vertex_positions: IntrinsicAttribute::from_vec(new_positions),
+            indices: new_cell_indices,
+            types: self.types.clone(),
+            vertex_attributes,
+            cell_attributes: self.cell_attributes.clone(),
+            cell_vertex_attributes: self.cell_vertex_attributes.clone(),
+            attribute_value_cache: self.attribute_value_cache.clone(),
+        };
+
+        (new_mesh, removed_count)
     }
 }
 
