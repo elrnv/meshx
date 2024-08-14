@@ -9,7 +9,7 @@
 //!  - `obj` via [`obj`](https://crates.io/obj).
 //!  - `vtk` via [`vtkio`](https://crates.io/vtkio).
 use std::path::Path;
-
+use vtkio::model;
 pub use vtkio::Vtk;
 
 use crate::attrib;
@@ -408,6 +408,7 @@ pub enum Error {
     UnsupportedDataFormat,
     MeshTypeMismatch,
     MissingMeshData,
+    UnsupportedCellTypes(Vec<model::CellType>),
 }
 
 impl std::error::Error for Error {
@@ -433,6 +434,9 @@ impl std::fmt::Display for Error {
             Error::UnsupportedDataFormat => write!(f, "Unsupported data format specified"),
             Error::MeshTypeMismatch => write!(f, "Mesh type doesn't match expected type"),
             Error::MissingMeshData => write!(f, "Missing mesh data"),
+            Error::UnsupportedCellTypes(t) => {
+                write!(f, "Cell types: {:#?}, are not supported!", t)
+            }
         }
     }
 }

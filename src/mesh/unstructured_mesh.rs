@@ -24,20 +24,6 @@ pub enum CellType {
     Pyramid,
     Hexahedron,
     Wedge,
-    /*VtkEmptyCell,
-    Vertex,
-    Line,
-    PolyLine,
-    VtkTriangleStrip,
-    VtkPolygon,
-    VtkPixel,
-    VtkQuad,
-    Voxel,
-    Hexahedron,
-    Wedge,
-    Pyramid,
-    PentagonalPrism,
-    HexagonalPrism,*/
 }
 
 impl CellType {
@@ -50,20 +36,6 @@ impl CellType {
             CellType::Pyramid => 5,
             CellType::Hexahedron => 8,
             CellType::Wedge => 6,
-            /*CellType::VtkEmptyCell => 0,
-            CellType::Vertex => 1,
-            CellType::Line => 2,
-            CellType::PolyLine =>
-            CellType::VtkTriangleStrip => {}
-            CellType::VtkPolygon => {}
-            CellType::VtkPixel => {}
-            CellType::VtkQuad => {}
-            CellType::Voxel => {}
-            CellType::Hexahedron => {}
-            CellType::Wedge => {}
-            CellType::Pyramid => {}
-            CellType::PentagonalPrism => {}
-            CellType::HexagonalPrism => {}*/
         }
     }
     pub fn num_tri_faces(&self) -> usize {
@@ -748,7 +720,7 @@ impl<T: Real> Mesh<T> {
 
         let quantize = |x: T| num_traits::Float::round(x / epsilon).to_i32().unwrap();
 
-        for (old_index, position) in self.vertex_positions.iter().enumerate() {
+        for position in self.vertex_positions.iter() {
             let quantized = [
                 quantize(position[0].clone()),
                 quantize(position[1].clone()),

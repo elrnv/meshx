@@ -1,4 +1,4 @@
-use crate::{tri_at, CellType, Index, Mesh, PolyMesh, Real, SortedTri, TetFace, TriMesh};
+use crate::{tri_at, CellType, Index, Mesh, PolyMesh, Real, SortedTri, TetFace};
 use std::fmt;
 
 use crate::attrib::{Attrib, AttribDict, IntrinsicAttribute};
@@ -8,7 +8,6 @@ use crate::topology::{
 };
 use ahash::AHashMap as HashMap;
 use ahash::RandomState;
-use flatk::ChunkedN;
 
 /// A quad with sorted vertices
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Debug)]
@@ -34,7 +33,7 @@ pub struct QuadFace {
     /// Index of the corresponding quad within the source mesh.
     pub cell_index: usize,
     /// Index of the face within the cell
-    pub face_index: usize,
+    pub face_index: u16,
     pub cell_type: CellType,
 }
 
@@ -138,7 +137,7 @@ impl<T: Real> Mesh<T> {
                         let face = TetFace {
                             tri: tri_at(cell, tri_face),
                             tet_index: i,
-                            face_index,
+                            face_index: face_index as u16,
                             cell_type: *cell_type,
                         };
 
@@ -154,7 +153,7 @@ impl<T: Real> Mesh<T> {
                         let face = QuadFace {
                             quad: quad_at(cell, quad_face),
                             cell_index: i,
-                            face_index,
+                            face_index: face_index as u16,
                             cell_type: *cell_type,
                         };
 
@@ -215,7 +214,7 @@ impl<T: Real> Mesh<T> {
             vertices.extend_from_slice(&face.tri);
             offsets.push(vertices.len());
             cell_indices.push(face.tet_index);
-            cell_face_indices.push(face.face_index);
+            cell_face_indices.push(face.face_index.into());
             cell_types.push(face.cell_type);
         }
 
@@ -223,7 +222,7 @@ impl<T: Real> Mesh<T> {
             vertices.extend_from_slice(&face.quad);
             offsets.push(vertices.len());
             cell_indices.push(face.cell_index);
-            cell_face_indices.push(face.face_index);
+            cell_face_indices.push(face.face_index as usize);
             cell_types.push(face.cell_type);
         }
 
@@ -401,7 +400,6 @@ impl<T: Real> Mesh<T> {
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::mesh::{CellType, Mesh};
 
     #[test]

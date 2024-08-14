@@ -48,7 +48,7 @@ pub struct TetFace {
     /// Index of the corresponding tet within the source tetmesh.
     pub tet_index: usize,
     /// Index of the face within the tet betweeen 0 and 4.
-    pub face_index: usize,
+    pub face_index: u16,
     pub cell_type: CellType,
 }
 impl fmt::Debug for TetFace {
@@ -130,7 +130,7 @@ impl<T: Real> TetMesh<T> {
                 let face = TetFace {
                     tri: tri_at(cell, tet_face),
                     tet_index: i,
-                    face_index: face_idx,
+                    face_index: face_idx as u16,
                     cell_type: CellType::Tetrahedron,
                 };
 
@@ -185,7 +185,7 @@ impl<T: Real> TetMesh<T> {
         for face in triangles.into_iter().map(|(_, face)| face).filter(filter) {
             surface_topo.push(face.tri);
             tet_indices.push(face.tet_index);
-            tet_face_indices.push(face.face_index);
+            tet_face_indices.push(face.face_index as usize);
         }
 
         (surface_topo, tet_indices, tet_face_indices)
