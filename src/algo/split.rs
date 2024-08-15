@@ -11,7 +11,7 @@ use crate::index::*;
 use crate::mesh::topology::*;
 use crate::mesh::unstructured_mesh::CellType;
 use crate::mesh::{
-    Mesh, PolyMesh, QuadMesh, QuadMeshExt, TetMesh, TetMeshExt, TriMesh, TriMeshExt,
+    LineMesh, Mesh, PolyMesh, QuadMesh, QuadMeshExt, TetMesh, TetMeshExt, TriMesh, TriMeshExt,
 };
 use crate::Real;
 
@@ -176,6 +176,7 @@ where
 /// element.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TypedMesh<T: Real> {
+    Line(crate::mesh::LineMesh<T>),
     Tet(crate::mesh::TetMesh<T>),
     Tri(crate::mesh::TriMesh<T>),
 }
@@ -502,6 +503,44 @@ impl<T: Real> Mesh<T> {
             orig_vertex_index.clear();
 
             meshes.push(match cell_type {
+                CellType::Line => {
+                    let mut new_vertices = Vec::new();
+                    let new_indices = make_new_indices(
+                        cells,
+                        &mut new_vertices,
+                        &mut orig_vertex_index,
+                        &mut new_vertex_index,
+                    );
+                    let new_vertex_attributes = isolate_attributes(
+                        vertex_attributes,
+                        orig_vertex_index.iter().cloned(),
+                        &mut new_attribute_value_cache,
+                    );
+
+                    let mut face_attributes = AttribDict::new();
+                    for (name, cell_attrib) in new_cell_attributes.into_iter() {
+                        face_attributes.insert(name, cell_attrib.promote_into::<FaceIndex>());
+                    }
+                    let mut face_vertex_attributes = AttribDict::new();
+                    for (name, cell_vertex_attrib) in new_cell_vertex_attributes.into_iter() {
+                        face_vertex_attributes
+                            .insert(name, cell_vertex_attrib.promote_into::<FaceVertexIndex>());
+                    }
+
+                    let line_mesh = LineMesh {
+                        vertex_positions: IntrinsicAttribute::from_vec(new_vertices),
+                        indices: IntrinsicAttribute::from_vec(
+                            flatk::Chunked2::from_flat(new_indices).into(),
+                        ),
+                        vertex_attributes: new_vertex_attributes,
+                        face_attributes,
+                        face_vertex_attributes,
+                        face_edge_attributes: AttribDict::new(),
+                        attribute_value_cache: new_attribute_value_cache,
+                    };
+
+                    TypedMesh::Line(line_mesh)
+                }
                 CellType::Triangle => {
                     let mut new_vertices = Vec::new();
                     let new_indices = make_new_indices(

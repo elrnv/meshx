@@ -18,6 +18,7 @@ use flatk::{Chunked, ClumpedView, GetOffset, IntoValues, Offsets, Set, View, Vie
 /// A marker for the type of cell contained in a Mesh.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CellType {
+    Line,
     Triangle,
     Quad,
     Tetrahedron,
@@ -30,6 +31,7 @@ impl CellType {
     /// Returns the number of vertices referenced by this cell type.
     pub fn num_verts(&self) -> usize {
         match self {
+            CellType::Line => 2,
             CellType::Triangle => 3,
             CellType::Quad => 4,
             CellType::Tetrahedron => 4,

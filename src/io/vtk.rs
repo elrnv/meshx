@@ -61,6 +61,7 @@ pub fn convert_mesh_to_vtk_format<T: Real>(mesh: &Mesh<T>) -> Result<model::Vtk,
     let cell_types: Vec<_> = mesh
         .cell_type_iter()
         .map(|cell_type| match cell_type {
+            CellType::Line => model::CellType::Line,
             CellType::Tetrahedron => model::CellType::Tetra,
             CellType::Triangle => model::CellType::Triangle,
             CellType::Pyramid => model::CellType::Pyramid,
