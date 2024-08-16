@@ -111,23 +111,14 @@ impl<T: Real> Mesh<T> {
         indices: &flatk::Clumped<Vec<usize>>,
         types: impl std::iter::ExactSizeIterator<Item = &'a CellType> + Clone,
     ) -> (HashMap<SortedTri, TetFace>, HashMap<SortedQuad, QuadFace>) {
-        let mut tri_count = 0;
-        let mut quad_count = 0;
-
-        for (cells, cell_type) in indices.clump_iter().zip(types.clone()) {
-            let cell_count = cells.view().data.len() * cells.view().chunk_size;
-            tri_count += cell_type.num_tri_faces() * cell_count;
-            quad_count += cell_type.num_quad_faces() * cell_count;
-        }
-
         let mut triangles: HashMap<SortedTri, TetFace> = {
             // This will make surfacing tetmeshes deterministic.
             let hash_builder = RandomState::with_seeds(7, 47, 2377, 719);
-            HashMap::with_capacity_and_hasher(tri_count * 3, hash_builder)
+            HashMap::with_hasher(hash_builder)
         };
         let mut quads: HashMap<SortedQuad, QuadFace> = {
             let hash_builder = RandomState::with_seeds(7, 47, 2377, 719);
-            HashMap::with_capacity_and_hasher(quad_count * 4, hash_builder)
+            HashMap::with_hasher(hash_builder)
         };
 
         for (cells, cell_type) in indices.clump_iter().zip(types) {
