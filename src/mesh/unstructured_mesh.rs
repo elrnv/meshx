@@ -128,19 +128,6 @@ impl CellType {
     /// * `quad_handler` - A closure that handles quadrilateral faces. It receives two arguments:
     ///   - `usize`: The index of the quadrilateral face.
     ///   - `&[usize; 4]`: A reference to an array of 4 vertex indices defining the quadrilateral face.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// cell_type.enumerate_faces(
-    ///     |tri_index, tri_vertices| {
-    ///
-    ///     },
-    ///     |quad_index, quad_vertices| {
-    ///
-    ///     }
-    /// );
-    /// ```
     pub fn enumerate_faces<F, G>(&self, mut tri_handler: F, mut quad_handler: G)
     where
         F: FnMut(usize, &[usize; 3]),

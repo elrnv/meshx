@@ -392,6 +392,10 @@ impl<T: Real> Mesh<T> {
     /// // Optionally sort the vertices according to their original order.
     /// for mesh in meshes.iter_mut() {
     ///     match mesh {
+    ///         TypedMesh::Line(mesh) => {
+    ///             let orig_vtx = mesh.attrib_as_slice::<usize, VertexIndex>("orig_vertex_index").unwrap().to_vec();
+    ///             mesh.sort_vertices_by_key(|i| orig_vtx[i]);
+    ///         }
     ///         TypedMesh::Tri(mesh) => {
     ///             let orig_vtx = mesh.attrib_as_slice::<usize, VertexIndex>("orig_vertex_index").unwrap().to_vec();
     ///             mesh.sort_vertices_by_key(|i| orig_vtx[i]);
@@ -605,10 +609,18 @@ impl<T: Real> Mesh<T> {
                     };
                     TypedMesh::Tet(tetmesh)
                 }
-                CellType::Pyramid => {todo!()}
-                CellType::Hexahedron => {todo!()}
-                CellType::Wedge => {todo!()}
-                CellType::Quad => {todo!()}
+                CellType::Pyramid => {
+                    todo!()
+                }
+                CellType::Hexahedron => {
+                    todo!()
+                }
+                CellType::Wedge => {
+                    todo!()
+                }
+                CellType::Quad => {
+                    todo!()
+                }
             });
 
             // Clear new_vertex_index array.
