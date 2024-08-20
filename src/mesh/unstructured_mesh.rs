@@ -42,6 +42,7 @@ impl CellType {
     }
     pub fn num_tri_faces(&self) -> usize {
         match self {
+            CellType::Line => 0,
             CellType::Triangle => 1,
             CellType::Quad => 0,
             CellType::Tetrahedron => 4,
@@ -52,6 +53,7 @@ impl CellType {
     }
     pub fn num_quad_faces(&self) -> usize {
         match self {
+            CellType::Line => 0,
             CellType::Triangle => 0,
             CellType::Quad => 1,
             CellType::Tetrahedron => 0,
@@ -88,6 +90,7 @@ impl CellType {
     /// nth as defined by [`enumerate_faces`]
     pub fn nth_face_vertices(&self, nth_face: usize) -> std::slice::Iter<usize> {
         match self {
+            CellType::Line => CellType::EMPTY.iter(),
             CellType::Triangle => CellType::EMPTY.iter(),
             CellType::Quad => CellType::EMPTY.iter(),
             CellType::Tetrahedron => CellType::TETRAHEDRON_FACES[nth_face].iter(),
@@ -144,7 +147,7 @@ impl CellType {
         G: FnMut(usize, &[usize; 4]),
     {
         match self {
-            CellType::Triangle | CellType::Quad => {}
+            CellType::Line | CellType::Triangle | CellType::Quad => {}
             CellType::Tetrahedron => {
                 for (face_index, face_vertices) in Self::TETRAHEDRON_FACES.iter().enumerate() {
                     tri_handler(face_index, face_vertices);
