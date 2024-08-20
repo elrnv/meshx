@@ -3,6 +3,7 @@ use crate::index::{CheckedIndex, Index};
 use crate::mesh::topology::*;
 use crate::mesh::*;
 use crate::Real;
+use std::fmt;
 
 use super::TetMesh;
 
@@ -11,12 +12,12 @@ use ahash::RandomState;
 
 /// A triangle with sorted vertices
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Debug)]
-struct SortedTri {
+pub struct SortedTri {
     pub sorted_indices: [usize; 3],
 }
 
 impl SortedTri {
-    fn new([a, b, c]: [usize; 3]) -> Self {
+    pub(crate) fn new([a, b, c]: [usize; 3]) -> Self {
         SortedTri {
             sorted_indices: {
                 if a <= b {
@@ -47,7 +48,17 @@ pub struct TetFace {
     /// Index of the corresponding tet within the source tetmesh.
     pub tet_index: usize,
     /// Index of the face within the tet betweeen 0 and 4.
-    pub face_index: usize,
+    pub face_index: u16,
+    pub cell_type: CellType,
+}
+impl fmt::Debug for TetFace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TetFace {{ tri: {:?}, tet_index: {}, face_index: {}, cell_type: {:?} }}",
+            self.tri, self.tet_index, self.face_index, self.cell_type
+        )
+    }
 }
 
 impl TetFace {
@@ -63,7 +74,7 @@ impl TetFace {
 
 /// A utility function to index a slice using three indices, creating a new array of 3
 /// corresponding entries of the slice.
-fn tri_at<T: Copy>(slice: &[T], tri: &[usize; 3]) -> [T; 3] {
+pub fn tri_at<T: Copy>(slice: &[T], tri: &[usize; 3]) -> [T; 3] {
     [slice[tri[0]], slice[tri[1]], slice[tri[2]]]
 }
 
@@ -119,7 +130,8 @@ impl<T: Real> TetMesh<T> {
                 let face = TetFace {
                     tri: tri_at(cell, tet_face),
                     tet_index: i,
-                    face_index: face_idx,
+                    face_index: face_idx as u16,
+                    cell_type: CellType::Tetrahedron,
                 };
 
                 let key = SortedTri::new(face.tri);
@@ -173,7 +185,7 @@ impl<T: Real> TetMesh<T> {
         for face in triangles.into_iter().map(|(_, face)| face).filter(filter) {
             surface_topo.push(face.tri);
             tet_indices.push(face.tet_index);
-            tet_face_indices.push(face.face_index);
+            tet_face_indices.push(face.face_index as usize);
         }
 
         (surface_topo, tet_indices, tet_face_indices)

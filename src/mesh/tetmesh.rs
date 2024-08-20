@@ -9,7 +9,6 @@ mod extended;
 mod surface;
 
 pub use extended::*;
-pub use surface::*;
 
 use crate::attrib::*;
 use crate::mesh::topology::*;
