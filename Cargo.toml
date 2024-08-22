@@ -32,6 +32,9 @@ criterion = { version = "0.3" }
 autodiff = { version = "0.7", features = ["na"] }
 ron = "0.8"
 
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+
 [features]
 default = ["io"]
 io = ["vtkio", "objio", "mshio"]
