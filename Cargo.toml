@@ -20,7 +20,7 @@ rayon = { version = "1", optional = true }
 ahash = { version = "0.8" }
 math = { package = "nalgebra", version = "0.32" }
 flatk = { git = "https://github.com/elrnv/flatk.git", version = "0.5" }
-vtkio = { version = "0.6", optional = true }
+vtkio = { git = "https://github.com/Navier-AI/vtkio", optional = true }
 objio = { package = "obj", version = "0.10", optional = true }
 mshio = { version = "0.4", optional = true }
 ordered-float = { version = "3", default-features = false }
@@ -31,6 +31,9 @@ approx = "0.5"
 criterion = { version = "0.3" }
 autodiff = { version = "0.7", features = ["na"] }
 ron = "0.8"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+getrandom = { version = "0.2", features = ["js"] }
 
 [features]
 default = ["io"]

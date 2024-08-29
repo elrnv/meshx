@@ -74,21 +74,31 @@ pub trait MeshExtractor<T: crate::Real> {
  */
 
 /// Load a tetrahedral mesh from a given file.
-pub fn load_mesh<T: Real, P: AsRef<Path>>(file: P) -> Result<Mesh<T>, Error> {
-    load_mesh_impl(file.as_ref())
-}
-
-fn load_mesh_impl<T: Real>(file: &Path) -> Result<Mesh<T>, Error> {
-    match file.extension().and_then(|ext| ext.to_str()) {
+pub fn load_mesh<T: Real>(path: &Path, content: Option<&Vec<u8>>) -> Result<Mesh<T>, Error> {
+    match path.extension().and_then(|ext| ext.to_str()) {
         Some("vtk") | Some("vtu") | Some("pvtu") => {
-            let vtk = Vtk::import(file)?;
-            vtk.extract_mesh()
+            if let Some(content) = content {
+                // Use the provided content directly
+                // let vtk = Vtk::import_from_bytes(content.as_slice())?;
+                // vtk.extract_mesh()
+                let vtk = Vtk::import(path)?;
+                vtk.extract_mesh()
+            } else {
+                // Read the file from disk
+                let vtk = Vtk::import(path)?;
+                vtk.extract_mesh()
+            }
         }
         #[cfg(feature = "mshio")]
         Some("msh") => {
-            let msh_bytes = std::fs::read(file)?;
-            let msh = mshio::parse_msh_bytes(msh_bytes.as_slice()).map_err(msh::MshError::from)?;
-            msh.extract_mesh()
+            if let Some(content) = content {
+                let msh = mshio::parse_msh_bytes(content.as_slice()).map_err(msh::MshError::from)?;
+                msh.extract_mesh()
+            } else {
+                let msh_bytes = std::fs::read(path)?;
+                let msh = mshio::parse_msh_bytes(msh_bytes.as_slice()).map_err(msh::MshError::from)?;
+                msh.extract_mesh()
+            }
         }
         // NOTE: wavefront obj files don't support unstructured meshes.
         _ => Err(Error::UnsupportedFileFormat),
