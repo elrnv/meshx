@@ -10,7 +10,7 @@ pub use mshio::*;
 
 #[derive(Debug)]
 pub struct MshError {
-    message: String,
+    pub message: String,
 }
 
 impl std::error::Error for MshError {}
