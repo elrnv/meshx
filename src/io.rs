@@ -73,7 +73,7 @@ pub trait MeshExtractor<T: crate::Real> {
  * IO calls for unstructured Meshes
  */
 
-/// Load a tetrahedral mesh from a given file.
+/// Load a tetrahedral/triangle mesh from a given file.
 pub fn load_mesh<T: Real, P: AsRef<Path>>(file: P) -> Result<Mesh<T>, Error> {
     load_mesh_impl(file.as_ref())
 }
