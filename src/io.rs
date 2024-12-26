@@ -204,7 +204,14 @@ fn load_polymesh_impl<T: Real>(file: &Path) -> Result<PolyMesh<T>, Error> {
             vtk.extract_polymesh()
         }
         Some("obj") => {
-            let obj = obj::Obj::load_with_config(file, obj::LoadConfig { strict: false })?;
+            let mut obj = obj::Obj::load_with_config(file, obj::LoadConfig { strict: false })?;
+            obj.load_mtls().map_err(|e| Error::MeshIO {
+                source: MeshIOError::Msh {
+                    source: msh::MshError {
+                        message: e.to_string(),
+                    },
+                },
+            })?;
             obj.data.extract_polymesh()
         }
         _ => Err(Error::UnsupportedFileFormat),
