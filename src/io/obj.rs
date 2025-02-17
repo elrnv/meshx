@@ -10,8 +10,8 @@ use crate::Real;
 use super::{MeshExtractor, GROUP_ATTRIB_NAME, MTL_ATTRIB_NAME, OBJECT_ATTRIB_NAME};
 use super::{NORMAL_ATTRIB_NAME, UV_ATTRIB_NAME};
 
-pub use objio::ObjError;
 pub use objio::{LoadConfig, Obj, ObjData, ObjMaterial};
+pub use objio::{MtlLibsLoadError, ObjError};
 pub use ordered_float::NotNan;
 
 pub use super::Error;
