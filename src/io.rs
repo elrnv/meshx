@@ -204,7 +204,10 @@ fn load_polymesh_impl<T: Real>(file: &Path) -> Result<PolyMesh<T>, Error> {
             vtk.extract_polymesh()
         }
         Some("obj") => {
-            let obj = obj::Obj::load_with_config(file, obj::LoadConfig { strict: false })?;
+            let mut obj = obj::Obj::load_with_config(file, obj::LoadConfig { strict: false })?;
+            obj.load_mtls().map_err(|e| Error::MeshIO {
+                source: MeshIOError::Mtl { source: e },
+            })?;
             obj.data.extract_polymesh()
         }
         _ => Err(Error::UnsupportedFileFormat),
@@ -377,6 +380,9 @@ pub enum MeshIOError {
     Obj {
         source: obj::ObjError,
     },
+    Mtl {
+        source: obj::MtlLibsLoadError,
+    },
 }
 
 impl std::error::Error for MeshIOError {
@@ -385,6 +391,7 @@ impl std::error::Error for MeshIOError {
             MeshIOError::Msh { source } => Some(source),
             MeshIOError::Vtk { source } => Some(source),
             MeshIOError::Obj { source } => Some(source),
+            MeshIOError::Mtl { source } => Some(source),
         }
     }
 }
@@ -395,6 +402,7 @@ impl std::fmt::Display for MeshIOError {
             MeshIOError::Msh { source } => write!(f, "A Msh IO error occurred: {}", source),
             MeshIOError::Vtk { source } => write!(f, "A Vtk IO error occurred: {}", source),
             MeshIOError::Obj { source } => write!(f, "An Obj IO error occurred: {}", source),
+            MeshIOError::Mtl { source } => write!(f, "An Mtl IO error occurred: {}", source),
         }
     }
 }
