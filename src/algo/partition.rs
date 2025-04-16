@@ -181,9 +181,7 @@ mod tests {
 
         let index_bins = Uniform::new(0, nbins).unwrap();
 
-        let bins: Vec<[u32; 3]> = (0..nbins)
-            .map(|_| rng.random())
-            .collect();
+        let bins: Vec<[u32; 3]> = (0..nbins).map(|_| rng.random()).collect();
 
         (0..size)
             .map(|_| bins[index_bins.sample(&mut rng)])
@@ -209,8 +207,7 @@ mod tests {
             .unwrap();
 
         let (_, num_parts1) = ptcld.partition_by_attrib::<[u32; 3], VertexIndex>("attrib");
-        let (_, num_parts2) =
-            ptcld.partition_by_attrib_by_sort::<[u32; 3], VertexIndex>("attrib");
+        let (_, num_parts2) = ptcld.partition_by_attrib_by_sort::<[u32; 3], VertexIndex>("attrib");
         assert_eq!(num_parts1, num_parts2);
     }
 

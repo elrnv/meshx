@@ -1,6 +1,8 @@
 use crate::ops::{Centroid, ShapeMatrix, Volume};
 use crate::Pod;
-use math::{ClosedAddAssign, ClosedMulAssign, ClosedSubAssign, Matrix3, RealField, Scalar, Vector3};
+use math::{
+    ClosedAddAssign, ClosedMulAssign, ClosedSubAssign, Matrix3, RealField, Scalar, Vector3,
+};
 use num_traits::FromPrimitive;
 use std::ops::{Add, Mul, Sub};
 

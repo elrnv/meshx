@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 use crate::ops::*;
 use crate::Pod;
-use math::{convert, ClosedAddAssign, ClosedDivAssign, ClosedMulAssign, ClosedSubAssign, Matrix3, Scalar, Vector3};
+use math::{
+    convert, ClosedAddAssign, ClosedDivAssign, ClosedMulAssign, ClosedSubAssign, Matrix3, Scalar,
+    Vector3,
+};
 use num_traits::Zero;
 use std::ops::Neg;
 
@@ -55,7 +58,12 @@ impl<T: Scalar> Triangle<T> {
 
 impl<T> Triangle<T>
 where
-    T: Scalar + Zero + ClosedAddAssign<T> + ClosedMulAssign<T> + ClosedSubAssign<T> + Neg<Output = T>,
+    T: Scalar
+        + Zero
+        + ClosedAddAssign<T>
+        + ClosedMulAssign<T>
+        + ClosedSubAssign<T>
+        + Neg<Output = T>,
 {
     /// Compute the area weighted normal of this triangle. This is the standard way to compute the
     /// normal and the area of the triangle.
