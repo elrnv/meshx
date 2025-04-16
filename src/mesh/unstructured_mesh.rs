@@ -5,27 +5,160 @@
 //! cells of arbitrary shape.
 //!
 
+pub mod surface;
+
 use crate::attrib::*;
 use crate::mesh::topology::*;
 use crate::mesh::vertex_positions::VertexPositions;
 use crate::utils::slice::apply_permutation_with_seen;
 use crate::Real;
-
-use flatk::*;
+use ahash::{HashMap, HashMapExt};
+use flatk::{Chunked, ClumpedView, GetOffset, IntoValues, Offsets, Set, View, ViewMut};
 
 /// A marker for the type of cell contained in a Mesh.
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CellType {
-    Tetrahedron,
+    Line,
     Triangle,
+    Quad,
+    Tetrahedron,
+    Pyramid,
+    Hexahedron,
+    Wedge,
 }
 
 impl CellType {
     /// Returns the number of vertices referenced by this cell type.
     pub fn num_verts(&self) -> usize {
         match self {
+            CellType::Line => 2,
             CellType::Triangle => 3,
+            CellType::Quad => 4,
             CellType::Tetrahedron => 4,
+            CellType::Pyramid => 5,
+            CellType::Hexahedron => 8,
+            CellType::Wedge => 6,
+        }
+    }
+    pub fn num_tri_faces(&self) -> usize {
+        match self {
+            CellType::Line => 0,
+            CellType::Triangle => 1,
+            CellType::Quad => 0,
+            CellType::Tetrahedron => 4,
+            CellType::Pyramid => 4,
+            CellType::Hexahedron => 0,
+            CellType::Wedge => 2,
+        }
+    }
+    pub fn num_quad_faces(&self) -> usize {
+        match self {
+            CellType::Line => 0,
+            CellType::Triangle => 0,
+            CellType::Quad => 1,
+            CellType::Tetrahedron => 0,
+            CellType::Pyramid => 1,
+            CellType::Hexahedron => 6,
+            CellType::Wedge => 3,
+        }
+    }
+
+    pub const EMPTY: [usize; 0] = [];
+
+    // see https://raw.githubusercontent.com/Kitware/vtk-examples/gh-pages/src/Testing/Baseline/Cxx/GeometricObjects/TestLinearCellDemo.png
+    // for vertex positions.
+    // Defines an "order" for the faces of different cells. Larger ngons are always indexed
+    // after smaller ones when used in nth_face_vertices and enumerate_faces
+    pub const TETRAHEDRON_FACES: [[usize; 3]; 4] = [[1, 3, 2], [0, 2, 3], [0, 3, 1], [0, 1, 2]];
+
+    pub const PYRAMID_TRIS: [[usize; 3]; 4] = [[0, 4, 1], [1, 4, 2], [2, 4, 3], [3, 4, 0]];
+    pub const PYRAMID_QUAD: [usize; 4] = [0, 1, 2, 3];
+
+    pub const WEDGE_TRIS: [[usize; 3]; 2] = [[0, 2, 1], [3, 4, 5]];
+    pub const WEDGE_QUADS: [[usize; 4]; 3] = [[0, 3, 5, 2], [2, 5, 4, 1], [1, 4, 3, 0]];
+
+    pub const HEXAHEDRON_FACES: [[usize; 4]; 6] = [
+        [0, 1, 2, 3],
+        [0, 3, 7, 4],
+        [0, 4, 5, 1],
+        [6, 2, 1, 5],
+        [6, 5, 4, 7],
+        [6, 7, 3, 2],
+    ];
+
+    /// Utility function for getting the cell's nth face's vertices.
+    /// nth as defined by [`enumerate_faces`]
+    pub fn nth_face_vertices(&self, nth_face: usize) -> std::slice::Iter<usize> {
+        match self {
+            CellType::Line => CellType::EMPTY.iter(),
+            CellType::Triangle => CellType::EMPTY.iter(),
+            CellType::Quad => CellType::EMPTY.iter(),
+            CellType::Tetrahedron => CellType::TETRAHEDRON_FACES[nth_face].iter(),
+            CellType::Pyramid => {
+                if let Some(face) = CellType::PYRAMID_TRIS.get(nth_face) {
+                    face.iter()
+                } else {
+                    CellType::PYRAMID_QUAD.iter()
+                }
+            }
+            CellType::Hexahedron => CellType::HEXAHEDRON_FACES[nth_face].iter(),
+            CellType::Wedge => {
+                if let Some(face) = CellType::WEDGE_TRIS.get(nth_face) {
+                    face.iter()
+                } else {
+                    CellType::WEDGE_QUADS[nth_face - CellType::WEDGE_TRIS.len()].iter()
+                }
+            }
+        }
+    }
+
+    /// Enumerates all faces of a cell type, calling handlers for triangular and quadrilateral faces respectively.
+    ///
+    /// This method provides an efficient way to iterate over all faces of a cell, maintaining
+    /// consistency with the `nth_face_vertices` method. It calls the provided closure for each face,
+    /// passing the face index (corresponding to the `nth_face` in `nth_face_vertices`) and a reference
+    /// to the array of vertex indices defining the face.
+    ///
+    /// # Arguments
+    ///
+    /// * `tri_handler` - A closure that handles triangular faces. It receives two arguments:
+    ///   - `usize`: The index of the triangular face.
+    ///   - `&[usize; 3]`: A reference to an array of 3 vertex indices defining the triangular face.
+    ///
+    /// * `quad_handler` - A closure that handles quadrilateral faces. It receives two arguments:
+    ///   - `usize`: The index of the quadrilateral face.
+    ///   - `&[usize; 4]`: A reference to an array of 4 vertex indices defining the quadrilateral face.
+    pub fn enumerate_faces<F, G>(&self, mut tri_handler: F, mut quad_handler: G)
+    where
+        F: FnMut(usize, &[usize; 3]),
+        G: FnMut(usize, &[usize; 4]),
+    {
+        match self {
+            CellType::Line | CellType::Triangle | CellType::Quad => {}
+            CellType::Tetrahedron => {
+                for (face_index, face_vertices) in Self::TETRAHEDRON_FACES.iter().enumerate() {
+                    tri_handler(face_index, face_vertices);
+                }
+            }
+            CellType::Pyramid => {
+                for (face_index, face_vertices) in Self::PYRAMID_TRIS.iter().enumerate() {
+                    tri_handler(face_index, face_vertices);
+                }
+                quad_handler(Self::PYRAMID_TRIS.len(), &Self::PYRAMID_QUAD);
+            }
+            CellType::Hexahedron => {
+                for (face_index, face_vertices) in Self::HEXAHEDRON_FACES.iter().enumerate() {
+                    quad_handler(face_index, face_vertices);
+                }
+            }
+            CellType::Wedge => {
+                for (tri_index, face_vertices) in Self::WEDGE_TRIS.iter().enumerate() {
+                    tri_handler(tri_index, face_vertices);
+                }
+                for (quad_index, face_vertices) in Self::WEDGE_QUADS.iter().enumerate() {
+                    quad_handler(quad_index + Self::WEDGE_TRIS.len(), face_vertices);
+                }
+            }
         }
     }
 }
@@ -564,6 +697,78 @@ impl<T: Real> Mesh<T> {
 
         order
     }
+
+    /// Creates a new mesh with deduplicated vertices within a given epsilon.
+    ///
+    /// This function will create a new mesh where vertices that are closer than `epsilon` to each other
+    /// are merged, updating the indices accordingly, and adjusting all vertex-based attributes.
+    pub fn deduplicated_vertices(&self, epsilon: T) -> (Mesh<T>, usize)
+    where
+        T: Clone,
+    {
+        let mut unique_vertices: HashMap<[i32; 3], usize> = HashMap::new();
+        let mut new_indices: Vec<usize> = Vec::with_capacity(self.num_vertices());
+        let mut removed_count = 0;
+
+        let quantize = |x: T| num_traits::Float::round(x / epsilon).to_i32().unwrap();
+
+        for position in self.vertex_positions.iter() {
+            let quantized = [
+                quantize(position[0].clone()),
+                quantize(position[1].clone()),
+                quantize(position[2].clone()),
+            ];
+
+            let new_index = unique_vertices.len();
+            let new_index = match unique_vertices.entry(quantized) {
+                Entry::Occupied(o) => {
+                    removed_count += 1;
+                    *o.get()
+                }
+                Entry::Vacant(v) => {
+                    v.insert(new_index);
+                    new_index
+                }
+            };
+
+            new_indices.push(new_index);
+        }
+
+        let mut new_cell_indices = self.indices.clone();
+        for cell in new_cell_indices.iter_mut() {
+            for index in cell.iter_mut() {
+                *index = new_indices[*index];
+            }
+        }
+
+        let mut new_positions = vec![[T::zero(); 3]; unique_vertices.len()];
+        for (old_index, &new_index) in new_indices.iter().enumerate() {
+            new_positions[new_index] = self.vertex_positions[old_index].clone();
+        }
+
+        let mut vertex_attributes: AttribDict<VertexIndex> = AttribDict::new();
+
+        for (name, attrib) in self.attrib_dict::<VertexIndex>().iter() {
+            let new_attrib = attrib.duplicate_with_len(new_positions.len(), |mut new, old| {
+                for (&idx, val) in new_indices.iter().zip(old.iter()) {
+                    new.get_mut(idx).clone_from_other(val).unwrap();
+                }
+            });
+            vertex_attributes.insert(name.to_string(), new_attrib);
+        }
+
+        let new_mesh = Mesh {
+            vertex_positions: IntrinsicAttribute::from_vec(new_positions),
+            indices: new_cell_indices,
+            types: self.types.clone(),
+            vertex_attributes,
+            cell_attributes: self.cell_attributes.clone(),
+            cell_vertex_attributes: self.cell_vertex_attributes.clone(),
+            attribute_value_cache: self.attribute_value_cache.clone(),
+        };
+
+        (new_mesh, removed_count)
+    }
 }
 
 impl<T: Real> Default for Mesh<T> {
@@ -608,6 +813,7 @@ impl<T: Real> CellVertex for Mesh<T> {
     where
         CI: Copy + Into<CellIndex>,
     {
+        use flatk::Get;
         let cidx = usize::from(cidx.into());
         let num_verts_at_cell = self.indices.view().get(cidx)?.len();
         if which >= num_verts_at_cell {
@@ -630,6 +836,7 @@ impl<T: Real> CellVertex for Mesh<T> {
     where
         CI: Copy + Into<CellIndex>,
     {
+        use flatk::Get;
         let cidx = usize::from(cidx.into());
         self.indices.view().at(cidx).len()
     }
@@ -732,6 +939,7 @@ impl<T: Real> From<super::PointCloud<T>> for Mesh<T> {
 mod tests {
     use super::*;
     use crate::index::Index;
+    use flatk::Get;
 
     fn build_simple_mesh() -> Mesh<f64> {
         let points = vec![

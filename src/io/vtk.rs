@@ -2,6 +2,7 @@ use crate::algo::merge::Merge;
 use crate::attrib::{Attrib, AttribDict, AttribIndex, Attribute, AttributeValue};
 use crate::mesh::topology::*;
 use crate::mesh::{CellType, Mesh, PointCloud, PolyMesh, TetMesh, VertexPositions};
+use ahash::HashSet;
 use flatk::{
     consts::{U10, U11, U12, U13, U14, U15, U16, U2, U3, U4, U5, U6, U7, U8, U9},
     U,
@@ -60,8 +61,13 @@ pub fn convert_mesh_to_vtk_format<T: Real>(mesh: &Mesh<T>) -> Result<model::Vtk,
     let cell_types: Vec<_> = mesh
         .cell_type_iter()
         .map(|cell_type| match cell_type {
+            CellType::Line => model::CellType::Line,
             CellType::Tetrahedron => model::CellType::Tetra,
             CellType::Triangle => model::CellType::Triangle,
+            CellType::Pyramid => model::CellType::Pyramid,
+            CellType::Hexahedron => model::CellType::Hexahedron,
+            CellType::Wedge => model::CellType::Wedge,
+            CellType::Quad => model::CellType::Quad,
         })
         .collect();
 
@@ -293,9 +299,10 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
         let model::Vtk {
             file_path, data, ..
         } = &self;
+        let mut cell_type_list = HashSet::<usize>::default();
         match data {
             model::DataSet::UnstructuredGrid { pieces, .. } => {
-                Ok(Mesh::merge_iter(pieces.iter().filter_map(|piece| {
+                let mesh = Mesh::merge_iter(pieces.iter().filter_map(|piece| {
                     let model::UnstructuredGridPiece {
                         points,
                         cells: model::Cells { cell_verts, types },
@@ -327,7 +334,11 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                         let cell_type = match types[c] {
                             model::CellType::Triangle if n == 3 => CellType::Triangle,
                             model::CellType::Tetra if n == 4 => CellType::Tetrahedron,
+                            model::CellType::Pyramid if n == 5 => CellType::Pyramid,
+                            model::CellType::Hexahedron if n == 8 => CellType::Hexahedron,
+                            model::CellType::Wedge if n == 6 => CellType::Wedge,
                             _ => {
+                                cell_type_list.insert(types[c] as usize);
                                 // Not a valid cell type, skip it.
                                 begin = end as usize;
                                 continue;
@@ -374,7 +385,18 @@ impl<T: Real> MeshExtractor<T> for model::Vtk {
                     }
 
                     Some(mesh)
-                })))
+                }));
+                if cell_type_list.len() > 0 {
+                    use num_traits::FromPrimitive;
+                    return Err(Error::UnsupportedCellTypes(
+                        cell_type_list
+                            .into_iter()
+                            .map(|c| model::CellType::from_usize(c).unwrap())
+                            .collect::<Vec<model::CellType>>(),
+                    ));
+                } else {
+                    Ok(mesh)
+                }
             }
             _ => Err(Error::UnsupportedDataFormat),
         }
