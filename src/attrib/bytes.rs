@@ -32,6 +32,6 @@ mod tests {
     #[test]
     fn bytes_from_value_test() {
         let val = 10.2_f64;
-        assert_eq!(&val, Bytes::interpret_bytes(val.as_bytes()));
+        assert_eq!(&val, <f64 as Bytes>::interpret_bytes(val.as_bytes()));
     }
 }

@@ -8,7 +8,7 @@ mod bench {
     use crate::mesh::*;
     use crate::Real;
     use dync::VecDrop;
-    use rand::distributions::{Distribution, Standard};
+    use rand::distr::{Distribution, StandardUniform};
     use rand::prelude::*;
     use test::Bencher;
     use topology::*;
@@ -33,14 +33,14 @@ mod bench {
     #[inline]
     fn prepare_points<T>() -> Vec<[T; 3]>
     where
-        Standard: Distribution<T>,
+        StandardUniform: Distribution<T>,
     {
         let n = BUF_SIZE;
 
         let mut pts = Vec::new();
         let mut rng = StdRng::from_seed(SEED);
         for _ in 0..n {
-            pts.push([rng.gen(), rng.gen(), rng.gen()]);
+            pts.push([rng.random(), rng.random(), rng.random()]);
         }
 
         pts
@@ -50,7 +50,7 @@ mod bench {
     fn prepare_trimesh<T>() -> TriMesh<T>
     where
         T: 'static + Real + Default,
-        Standard: Distribution<T>,
+        StandardUniform: Distribution<T>,
     {
         let pts = prepare_points::<T>();
 
