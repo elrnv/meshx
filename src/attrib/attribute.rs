@@ -578,7 +578,7 @@ impl DirectData {
 
     /// Produce an iterator over the underlying data elements.
     #[inline]
-    pub fn iter<'a, T: Any + 'a>(&'a self) -> Result<slice::Iter<T>, Error> {
+    pub fn iter<T: Any>(&self) -> Result<slice::Iter<T>, Error> {
         self.buf
             .iter_as::<T>()
             .ok_or_else(|| Error::type_mismatch_from_buf::<T, _>(&self.buf))
@@ -586,7 +586,7 @@ impl DirectData {
 
     /// Produce a mutable iterator over the underlying data elements.
     #[inline]
-    pub fn iter_mut<'a, T: Any + 'a>(&'a mut self) -> Result<slice::IterMut<T>, Error> {
+    pub fn iter_mut<T: Any>(&mut self) -> Result<slice::IterMut<T>, Error> {
         let element_id = self.buf.element_type_id();
         self.buf
             .iter_mut_as::<T>()

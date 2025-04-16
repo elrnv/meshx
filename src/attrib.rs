@@ -432,7 +432,7 @@ where
     fn direct_attrib_iter<'a, 'b, T, I: 'b + AttribIndex<Self>>(
         &'b self,
         name: &'a str,
-    ) -> Result<slice::Iter<T>, Error>
+    ) -> Result<slice::Iter<'b, T>, Error>
     where
         T: Any + Clone,
     {
@@ -445,7 +445,7 @@ where
     fn attrib_iter_mut<'a, 'b, T, I: 'b + AttribIndex<Self>>(
         &'b mut self,
         name: &'a str,
-    ) -> Result<slice::IterMut<T>, Error>
+    ) -> Result<slice::IterMut<'b, T>, Error>
     where
         T: Any + Clone,
     {

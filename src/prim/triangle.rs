@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use crate::ops::*;
 use crate::Pod;
-use math::{convert, ClosedAdd, ClosedDiv, ClosedMul, ClosedSub, Matrix3, Scalar, Vector3};
+use math::{convert, ClosedAddAssign, ClosedDivAssign, ClosedMulAssign, ClosedSubAssign, Matrix3, Scalar, Vector3};
 use num_traits::Zero;
 use std::ops::Neg;
 
@@ -55,7 +55,7 @@ impl<T: Scalar> Triangle<T> {
 
 impl<T> Triangle<T>
 where
-    T: Scalar + Zero + ClosedAdd<T> + ClosedMul<T> + ClosedSub<T> + Neg<Output = T>,
+    T: Scalar + Zero + ClosedAddAssign<T> + ClosedMulAssign<T> + ClosedSubAssign<T> + Neg<Output = T>,
 {
     /// Compute the area weighted normal of this triangle. This is the standard way to compute the
     /// normal and the area of the triangle.
@@ -120,7 +120,7 @@ where
 
 impl<'a, T> Centroid<Vector3<T>> for &'a Triangle<T>
 where
-    T: Scalar + ClosedAdd<T> + ClosedDiv<T> + num_traits::FromPrimitive,
+    T: Scalar + ClosedAddAssign<T> + ClosedDivAssign<T> + num_traits::FromPrimitive,
 {
     #[inline]
     fn centroid(self) -> Vector3<T> {
@@ -143,7 +143,7 @@ where
 
 impl<'a, T> Centroid<[T; 3]> for &'a Triangle<T>
 where
-    T: Scalar + ClosedAdd<T> + ClosedDiv<T> + num_traits::FromPrimitive,
+    T: Scalar + ClosedAddAssign<T> + ClosedDivAssign<T> + num_traits::FromPrimitive,
 {
     #[inline]
     fn centroid(self) -> [T; 3] {
@@ -186,7 +186,7 @@ impl<T: Scalar> std::ops::IndexMut<usize> for Triangle<T> {
 }
 
 /// Returns a column major 3x2 matrix.
-impl<'a, T: Scalar + ClosedSub<T>> ShapeMatrix<[[T; 3]; 2]> for &'a Triangle<T> {
+impl<'a, T: Scalar + ClosedSubAssign<T>> ShapeMatrix<[[T; 3]; 2]> for &'a Triangle<T> {
     #[inline]
     fn shape_matrix(self) -> [[T; 3]; 2] {
         let tri = self.clone();
@@ -195,7 +195,7 @@ impl<'a, T: Scalar + ClosedSub<T>> ShapeMatrix<[[T; 3]; 2]> for &'a Triangle<T> 
 }
 
 /// Returns a column major 3x2 matrix.
-impl<T: Scalar + ClosedSub<T>> ShapeMatrix<[[T; 3]; 2]> for Triangle<T> {
+impl<T: Scalar + ClosedSubAssign<T>> ShapeMatrix<[[T; 3]; 2]> for Triangle<T> {
     #[inline]
     fn shape_matrix(self) -> [[T; 3]; 2] {
         [(self.0 - self.2.clone()).into(), (self.1 - self.2).into()]

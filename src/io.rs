@@ -1,3 +1,5 @@
+#![allow(unexpected_cfgs)]
+
 //! IO module for mesh files.
 //!
 //! Supported formats for loading:

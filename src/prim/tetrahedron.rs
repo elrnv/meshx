@@ -1,6 +1,6 @@
 use crate::ops::{Centroid, ShapeMatrix, Volume};
 use crate::Pod;
-use math::{ClosedAdd, ClosedMul, ClosedSub, Matrix3, RealField, Scalar, Vector3};
+use math::{ClosedAddAssign, ClosedMulAssign, ClosedSubAssign, Matrix3, RealField, Scalar, Vector3};
 use num_traits::FromPrimitive;
 use std::ops::{Add, Mul, Sub};
 
@@ -58,7 +58,7 @@ impl<T: Scalar> Tetrahedron<T> {
     }
 }
 
-impl<T: Scalar + ClosedAdd<T>> Add for Tetrahedron<T> {
+impl<T: Scalar + ClosedAddAssign<T>> Add for Tetrahedron<T> {
     type Output = Tetrahedron<T>;
 
     fn add(self, other: Tetrahedron<T>) -> Tetrahedron<T> {
@@ -71,7 +71,7 @@ impl<T: Scalar + ClosedAdd<T>> Add for Tetrahedron<T> {
     }
 }
 
-impl<'a, T: Scalar + ClosedAdd<T>> Add for &'a Tetrahedron<T> {
+impl<'a, T: Scalar + ClosedAddAssign<T>> Add for &'a Tetrahedron<T> {
     type Output = Tetrahedron<T>;
 
     fn add(self, other: &Tetrahedron<T>) -> Tetrahedron<T> {
@@ -84,7 +84,7 @@ impl<'a, T: Scalar + ClosedAdd<T>> Add for &'a Tetrahedron<T> {
     }
 }
 
-impl<T: Scalar + ClosedSub<T>> Sub for Tetrahedron<T> {
+impl<T: Scalar + ClosedSubAssign<T>> Sub for Tetrahedron<T> {
     type Output = Tetrahedron<T>;
 
     fn sub(self, other: Tetrahedron<T>) -> Tetrahedron<T> {
@@ -97,7 +97,7 @@ impl<T: Scalar + ClosedSub<T>> Sub for Tetrahedron<T> {
     }
 }
 
-impl<'a, T: Scalar + ClosedSub<T>> Sub for &'a Tetrahedron<T> {
+impl<'a, T: Scalar + ClosedSubAssign<T>> Sub for &'a Tetrahedron<T> {
     type Output = Tetrahedron<T>;
 
     fn sub(self, other: &Tetrahedron<T>) -> Tetrahedron<T> {
@@ -110,7 +110,7 @@ impl<'a, T: Scalar + ClosedSub<T>> Sub for &'a Tetrahedron<T> {
     }
 }
 
-impl<T: Scalar + ClosedMul<T>> Mul<T> for Tetrahedron<T> {
+impl<T: Scalar + ClosedMulAssign<T>> Mul<T> for Tetrahedron<T> {
     type Output = Self;
 
     fn mul(self, rhs: T) -> Self {
@@ -123,7 +123,7 @@ impl<T: Scalar + ClosedMul<T>> Mul<T> for Tetrahedron<T> {
     }
 }
 
-impl<'a, T: Scalar + ClosedMul<T>> Mul<T> for &'a Tetrahedron<T> {
+impl<'a, T: Scalar + ClosedMulAssign<T>> Mul<T> for &'a Tetrahedron<T> {
     type Output = Tetrahedron<T>;
 
     fn mul(self, rhs: T) -> Tetrahedron<T> {
@@ -137,7 +137,7 @@ impl<'a, T: Scalar + ClosedMul<T>> Mul<T> for &'a Tetrahedron<T> {
     }
 }
 
-impl<'a, T: Scalar + ClosedAdd<T> + ClosedMul<T> + FromPrimitive> Centroid<[T; 3]>
+impl<'a, T: Scalar + ClosedAddAssign<T> + ClosedMulAssign<T> + FromPrimitive> Centroid<[T; 3]>
     for &'a Tetrahedron<T>
 {
     #[inline]
@@ -148,7 +148,7 @@ impl<'a, T: Scalar + ClosedAdd<T> + ClosedMul<T> + FromPrimitive> Centroid<[T; 3
 }
 
 /// Column-major array matrix.
-impl<'a, T: Scalar + ClosedSub<T>> ShapeMatrix<[[T; 3]; 3]> for &'a Tetrahedron<T> {
+impl<'a, T: Scalar + ClosedSubAssign<T>> ShapeMatrix<[[T; 3]; 3]> for &'a Tetrahedron<T> {
     #[inline]
     fn shape_matrix(self) -> [[T; 3]; 3] {
         let tet = self.clone();
@@ -160,7 +160,7 @@ impl<'a, T: Scalar + ClosedSub<T>> ShapeMatrix<[[T; 3]; 3]> for &'a Tetrahedron<
     }
 }
 
-impl<T: Scalar + ClosedSub<T>> ShapeMatrix<[[T; 3]; 3]> for Tetrahedron<T> {
+impl<T: Scalar + ClosedSubAssign<T>> ShapeMatrix<[[T; 3]; 3]> for Tetrahedron<T> {
     #[inline]
     fn shape_matrix(self) -> [[T; 3]; 3] {
         [

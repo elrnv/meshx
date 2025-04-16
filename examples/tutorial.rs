@@ -80,7 +80,7 @@ fn main() {
      * IO: loading and saving meshes
      */
 
-    #[cfg(features = "io")]
+    #[cfg(feature = "io")]
     {
         meshx::io::save_trimesh(&mesh, "tests/artifacts/tutorial_trimesh.vtk")
             .expect("Failed to save the tutorial triangle mesh");

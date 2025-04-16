@@ -172,17 +172,17 @@ mod tests {
         );
     }
 
-    fn partition_data(size: usize, nbins: usize) -> Vec<[usize; 3]> {
-        use rand::distributions::Uniform;
+    fn partition_data(size: usize, nbins: usize) -> Vec<[u32; 3]> {
+        use rand::distr::Uniform;
         use rand::prelude::*;
 
         let seed = [3u8; 32];
         let mut rng = StdRng::from_seed(seed);
 
-        let index_bins = Uniform::from(0..nbins);
+        let index_bins = Uniform::new(0, nbins).unwrap();
 
-        let bins: Vec<[usize; 3]> = (0..nbins)
-            .map(|_| [rng.gen(), rng.gen(), rng.gen()])
+        let bins: Vec<[u32; 3]> = (0..nbins)
+            .map(|_| rng.random())
             .collect();
 
         (0..size)
@@ -199,7 +199,7 @@ mod tests {
 
         // The vertex positions are actually unimportant here.
         let verts: Vec<[f64; 3]> = (0..size)
-            .map(|_| [rng.gen(), rng.gen(), rng.gen()])
+            .map(|_| [rng.random(), rng.random(), rng.random()])
             .collect();
         let mut ptcld = PointCloud::new(verts);
 
@@ -208,9 +208,9 @@ mod tests {
             .insert_attrib_data::<_, VertexIndex>("attrib", data)
             .unwrap();
 
-        let (_, num_parts1) = ptcld.partition_by_attrib::<[usize; 3], VertexIndex>("attrib");
+        let (_, num_parts1) = ptcld.partition_by_attrib::<[u32; 3], VertexIndex>("attrib");
         let (_, num_parts2) =
-            ptcld.partition_by_attrib_by_sort::<[usize; 3], VertexIndex>("attrib");
+            ptcld.partition_by_attrib_by_sort::<[u32; 3], VertexIndex>("attrib");
         assert_eq!(num_parts1, num_parts2);
     }
 
@@ -223,7 +223,7 @@ mod tests {
 
         // The vertex positions are actually unimportant here.
         let verts: Vec<[f64; 3]> = (0..size)
-            .map(|_| [rng.gen(), rng.gen(), rng.gen()])
+            .map(|_| [rng.random(), rng.random(), rng.random()])
             .collect();
         let mut ptcld = PointCloud::new(verts);
 
@@ -233,7 +233,7 @@ mod tests {
             .unwrap();
 
         let now = std::time::Instant::now();
-        let (_, num_parts) = ptcld.partition_by_attrib::<[usize; 3], VertexIndex>("attrib");
+        let (_, num_parts) = ptcld.partition_by_attrib::<[u32; 3], VertexIndex>("attrib");
         eprintln!("hash time = {}", now.elapsed().as_millis());
         eprintln!("{}", num_parts);
     }
@@ -247,7 +247,7 @@ mod tests {
 
         // The vertex positions are actually unimportant here.
         let verts: Vec<[f64; 3]> = (0..size)
-            .map(|_| [rng.gen(), rng.gen(), rng.gen()])
+            .map(|_| [rng.random(), rng.random(), rng.random()])
             .collect();
         let mut ptcld = PointCloud::new(verts);
 
@@ -257,7 +257,7 @@ mod tests {
             .unwrap();
 
         let now = std::time::Instant::now();
-        let (_, num_parts) = ptcld.partition_by_attrib_by_sort::<[usize; 3], VertexIndex>("attrib");
+        let (_, num_parts) = ptcld.partition_by_attrib_by_sort::<[u32; 3], VertexIndex>("attrib");
         eprintln!("sort time = {}", now.elapsed().as_millis());
         eprintln!("{}", num_parts);
     }
